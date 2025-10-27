@@ -16,6 +16,7 @@
 - Alertas por temperatura, vibracion o presion, etc
 """
 
+from typing import Dict, List
 from Shared.MongoSingleton import MongoSingleton
 
 """
@@ -28,8 +29,12 @@ class StadisticalHelper:
     def __init__(self):
         self.mongo_client = MongoSingleton.get_singleton_client()
     
-    def get_raw_data(self):
-        pass 
+    def get_stats_turbine(self, turbine_id: str, minutes: int = 5, fields: List[str] = ("wind_speed_mps",)) -> Dict[str, Any]:
+        return self.db.get_window_stats(turbine_id=turbine_id, minutes=minutes, fields=list(fields))
+
+    def get_stats_farm(self, farm_id: str, minutes: int = 5, fields: List[str] = ("wind_speed_mps",)) -> Dict[str, Any]:
+        return self.db.get_window_stats_for_farm(farm_id=farm_id, minutes=minutes, fields=list(fields))
+    
     
     
     

@@ -7,17 +7,18 @@
 import json
 
 from Shared.GenericMQTTClient import GenericMQTTClient
-from Shared.MongoSingleton import MongoSingleton 
+from Shared.MongoSingleton import MongoSingleton
+from StatNode.DB.TelemetryDB import TelemetryDB 
 
 # TOPIC_TELEMETRY = "farms/{farm_id}/turbines/+/raw_telemetry"
 
-class RawTelemtrySuscriber:
+class RawTelemetrySuscriber:
     def __init__(self, farm_id: int):
         # self.RAW_TELEMETRY_TOPIC = f"farms/{farm_id}/turbines/+/raw_telemetry"
         
         self.raw_telemetry_topic = f"farms/{farm_id}/turbines/+/raw_telemetry" # suscription topic 
         self.mqtt_client = GenericMQTTClient(client_id="stat-processor") 
-        self.mongo_client = MongoSingleton.get_singleton_client()
+        self.db_service = TelemetryDB() # Servicio DB 
         
         # Ejemplo uso MongoSingleton
         # self.mongo_client.insert_one("turbine_data", {"turbine_id": "T-001", "rpm": 1500})
@@ -38,12 +39,13 @@ class RawTelemtrySuscriber:
     def _message_callback(self, client, userdata, msg):
         payload = msg.payload.decode()
         try:
-            data = json.loads(payload)
+            data: dict = json.loads(payload)
             print(f"\nRecibido en '{msg.topic}': {data} \n******")
         
             # Insercion en BD 
-            insertion_id = self.mongo_client.insert_one("Telemtry", data)
-            print(f"Documento insertado en 'Telemetry' con _id={insertion_id}\n")
+            self.db_service.insert_telemetry(data)
+            #insertion_id = self.mongo_client.insert_one("Telemtry", data)
+            #print(f"Documento insertado en 'Telemetry' con _id={insertion_id}\n")
             
         except json.JSONDecodeError:
             data = payload
@@ -53,6 +55,6 @@ class RawTelemtrySuscriber:
         
         
 if __name__ == '__main__':
-    sub = RawTelemtrySuscriber(farm_id=1)
+    sub = RawTelemetrySuscriber(farm_id=1)
     sub.start()
     

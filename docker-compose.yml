@@ -10,13 +10,13 @@ services:
       - "8084:8084"     # MQTT sobre WebSocket (TLS)
       - "18083:18083"   # Dashboard web
 
-  api:
-    build: 
-      context: ./AlertHistoryBackend   # carpeta base del proyecto Flask
-      dockerfile: Dockerfile
-    container_name: flask_api_dev
-    ports:
-      - "5000:5000"
-    environment:
-      - FLASK_APP=server.py
-      - FLASK_ENV=development
+  # api:
+  #   build: 
+  #     context: ./AlertHistoryBackend   # carpeta base del proyecto Flask
+  #     dockerfile: Dockerfile
+  #   container_name: flask_api_dev
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - FLASK_APP=server.py
+  #     - FLASK_ENV=development

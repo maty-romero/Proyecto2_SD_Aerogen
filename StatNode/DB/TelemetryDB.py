@@ -1,6 +1,6 @@
-# telemetry_repository.py
+# telemetry_db.py
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Optional, List, Dict, Any
 from pymongo.errors import PyMongoError
 
 from Shared.GenericMongoClient import GenericMongoClient
@@ -8,23 +8,18 @@ from Shared.MongoSingleton import MongoSingleton
 
 
 class TelemetryDB:
-    """
-    Especie de Repository para operaciones de telemetría.
-    - Por defecto usa MongoSingleton.get_singleton_client()
-    - Pero podés inyectar otro GenericMongoClient (por ejemplo para tests).
-    """
     def __init__(self, mongo_client: Optional[GenericMongoClient] = None, db_name: str = "test_db"):
         if mongo_client is None:
             self.mongo = MongoSingleton.get_singleton_client(db_name=db_name)
         else:
             self.mongo = mongo_client
-        # self.mongo.db es el objeto Database de pymongo (asumimos que lo expone GenericMongoClient)
-        self.db = self.mongo.db
+        # no usamos self.mongo.db directamente; usamos get_collection()
 
     def insert_telemetry(self, payload: dict) -> object:
-        """Inserta un documento de telemetría (usa GenericMongoClient.insert_one)."""
-        collection: str = "telemetry"
-        return self.mongo.insert_one(collection, payload)
+        collection_name = "telemetry"
+        insertion_id = self.mongo.insert_one(collection_name, payload)
+        print(f"Documento insertado en 'Telemetry' con _id={insertion_id}\n")
+        return 
 
     def get_window_stats(self,
                          turbine_id: Optional[str] = None,
@@ -32,12 +27,8 @@ class TelemetryDB:
                          minutes: int = 5,
                          fields: List[str] = ("wind_speed_mps",),
                          collection: str = "telemetry") -> Dict[str, dict]:
-        """
-        Calcula avg/min/max/count/stdDev para los campos indicados en la ventana 'minutes'.
-        Retorna un dict por campo con las métricas o valores None si no hay datos.
-        """
-        since = datetime.utcnow() - timedelta(minutes=minutes)
 
+        since = datetime.utcnow() - timedelta(minutes=minutes)
         match = {"timestamp": {"$gte": since}}
         if turbine_id:
             match["turbine_id"] = turbine_id
@@ -51,15 +42,12 @@ class TelemetryDB:
             group_stage[f"_max_{f}"] = {"$max": f"${f}"}
             group_stage[f"_std_{f}"] = {"$stdDevSamp": f"${f}"}
 
-        pipeline = [
-            {"$match": match},
-            {"$group": group_stage}
-        ]
+        pipeline = [{"$match": match}, {"$group": group_stage}]
 
         try:
-            res = list(self.db[collection].aggregate(pipeline))
+            collection_obj = self.mongo.get_collection(collection)
+            res = list(collection_obj.aggregate(pipeline))
         except PyMongoError as e:
-            # Propaga o maneja el error según tu política
             raise
 
         if not res:
@@ -78,10 +66,6 @@ class TelemetryDB:
         return out
 
     def get_window_stats_for_farm(self, farm_id: str, minutes: int = 5, fields: List[str] = ("wind_speed_mps",)):
-        """
-        Ejemplo: obtener stats para todas las turbinas de un farm en una sola consulta.
-        Retorna un dict { turbine_id: {campo: metrics...}, ... }
-        """
         since = datetime.utcnow() - timedelta(minutes=minutes)
         pipeline = [
             {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}}},
@@ -96,7 +80,8 @@ class TelemetryDB:
         ]
 
         try:
-            cursor = self.db["telemetry"].aggregate(pipeline)
+            collection_obj = self.mongo.get_collection("telemetry")
+            cursor = collection_obj.aggregate(pipeline)
             results = {}
             for doc in cursor:
                 tid = doc["_id"]

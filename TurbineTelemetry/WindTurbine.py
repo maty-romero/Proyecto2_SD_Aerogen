@@ -27,23 +27,38 @@ class WindTurbine:
     def get_telemetry_data(self) -> dict:
         # Genera datos de turbina 
         return {
+            # Datos identificacion 
             "farm_id": self.farm_id,
             "farm_name": f"Farm-00{self.farm_id}",
             "turbine_id": self.turbine_id,
             "turbine_name": f"T-00{self.turbine_id}",
+
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            # Variables entorno
             "wind_speed_mps": round(random.uniform(3.0, 25.0), 2),
             "wind_direction_deg": random.randint(0, 360),
+            "ambience_temperature": random.randint(-10, 20),
             "atmospheric_pressure_hpa": round(random.uniform(980, 1030), 1),
+            # Variables mecanicas 
             "rotor_speed_rpm": round(random.uniform(10, 20), 2),
             "blade_pitch_angle_deg": round(random.uniform(0, 30), 1),
-            "gearbox_temperature_c": round(random.uniform(40, 90), 1),
-            "output_voltage_v": round(random.uniform(380, 420), 1),
-            "generated_current_a": round(random.uniform(200, 500), 1),
+            "yaw_position_deg": round(random.uniform(0.0, 360.0), 2),              # grados
+            "vibrations_mms": round(random.uniform(0.1, 5.0), 2),                  # mm/s
+            "gear_temperature_c": round(random.uniform(30.0, 90.0), 1),           # °C
+            "bearing_temperature_c": round(random.uniform(25.0, 80.0), 1),        # °C
+            "oil_pressure_bar": round(random.uniform(1.0, 10.0), 2),              # bar
+            "oil_level_percent": round(random.uniform(20.0, 100.0), 1),
+            # Variables electricas
+            "output_voltage_v": round(random.uniform(380.0, 420.0), 1),           # Voltaje de salida en V
+            "generated_current_a": round(random.uniform(10.0, 200.0), 2),         # Corriente generada en A
+            "active_power_kw": round(random.uniform(50.0, 500.0), 2),             # Potencia activa en kW
+            "reactive_power_kvar": round(random.uniform(10.0, 300.0), 2),         # Potencia reactiva en kVAR
+            "output_frequency_hz": round(random.uniform(49.5, 50.5), 2),
+            # Estado del sistema 
             "operational_state": "active" # por ahora siempre activo
-            
+            #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])
         }
-        #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])
+        
         
 
     def start(self):
