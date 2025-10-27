@@ -41,8 +41,10 @@ class WindTurbine:
             "output_voltage_v": round(random.uniform(380, 420), 1),
             "generated_current_a": round(random.uniform(200, 500), 1),
             "operational_state": "active" # por ahora siempre activo
-            #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])
+            
         }
+        #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])
+        
 
     def start(self):
         """
