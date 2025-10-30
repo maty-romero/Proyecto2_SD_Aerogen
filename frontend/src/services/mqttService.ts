@@ -1,0 +1,253 @@
+import { 
+  MqttTurbineMessage, 
+  MqttAlertMessage, 
+  MqttStatsMessage,
+  Turbine,
+  Alert
+} from '../types/turbine';
+
+/**
+ * MQTT Service para integración con EMQX
+ * 
+ * Este servicio gestiona la conexión con el broker MQTT EMQX
+ * y maneja las suscripciones a los diferentes tópicos.
+ * 
+ * Tópicos esperados:
+ * - windfarm/turbines/{turbineId}/measurements - Mediciones de cada molino
+ * - windfarm/alerts - Alertas del sistema
+ * - windfarm/stats - Estadísticas generales del parque
+ */
+
+export class MqttService {
+  private client: any = null;
+  private connected: boolean = false;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+  
+  // Callbacks para manejo de datos
+  private onTurbineDataCallback?: (turbineId: string, data: MqttTurbineMessage) => void;
+  private onAlertCallback?: (alert: MqttAlertMessage) => void;
+  private onStatsCallback?: (stats: MqttStatsMessage) => void;
+  private onConnectionChangeCallback?: (connected: boolean) => void;
+
+  constructor(
+    private brokerUrl: string = 'ws://localhost:8083/mqtt', // URL del broker EMQX
+    private options: {
+      clientId?: string;
+      username?: string;
+      password?: string;
+      clean?: boolean;
+      reconnectPeriod?: number;
+    } = {}
+  ) {
+    this.options = {
+      clientId: options.clientId || `windfarm_client_${Math.random().toString(16).substr(2, 8)}`,
+      username: options.username,
+      password: options.password,
+      clean: options.clean !== false,
+      reconnectPeriod: options.reconnectPeriod || 5000,
+    };
+  }
+
+  /**
+   * Conecta al broker MQTT
+   */
+  async connect(): Promise<void> {
+    try {
+      // En producción, aquí se usaría una librería MQTT como mqtt.js
+      // import mqtt from 'mqtt';
+      // this.client = mqtt.connect(this.brokerUrl, this.options);
+      
+      // Por ahora, simulamos la conexión
+      console.log('Conectando a MQTT broker:', this.brokerUrl);
+      
+      // Simulación de conexión exitosa
+      this.connected = true;
+      this.reconnectAttempts = 0;
+      
+      if (this.onConnectionChangeCallback) {
+        this.onConnectionChangeCallback(true);
+      }
+      
+      // Suscribirse a tópicos
+      this.subscribeToTopics();
+      
+      console.log('Conectado a MQTT broker exitosamente');
+    } catch (error) {
+      console.error('Error conectando a MQTT:', error);
+      this.handleReconnect();
+    }
+  }
+
+  /**
+   * Suscribirse a los tópicos del sistema
+   */
+  private subscribeToTopics(): void {
+    if (!this.connected) return;
+
+    // Suscribirse a mediciones de todas las turbinas
+    this.subscribe('windfarm/turbines/+/measurements');
+    
+    // Suscribirse a alertas
+    this.subscribe('windfarm/alerts');
+    
+    // Suscribirse a estadísticas generales
+    this.subscribe('windfarm/stats');
+    
+    console.log('Suscrito a tópicos MQTT');
+  }
+
+  /**
+   * Suscribirse a un tópico específico
+   */
+  private subscribe(topic: string): void {
+    try {
+      // En producción:
+      // this.client.subscribe(topic, { qos: 1 });
+      console.log('Suscrito al tópico:', topic);
+    } catch (error) {
+      console.error('Error suscribiendo al tópico:', topic, error);
+    }
+  }
+
+  /**
+   * Maneja mensajes MQTT entrantes
+   */
+  private handleMessage(topic: string, payload: Buffer): void {
+    try {
+      const message = JSON.parse(payload.toString());
+      
+      // Procesar según el tópico
+      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/measurements')) {
+        const turbineId = topic.split('/')[2];
+        this.handleTurbineMessage(turbineId, message);
+      } else if (topic === 'windfarm/alerts') {
+        this.handleAlertMessage(message);
+      } else if (topic === 'windfarm/stats') {
+        this.handleStatsMessage(message);
+      }
+    } catch (error) {
+      console.error('Error procesando mensaje MQTT:', error);
+    }
+  }
+
+  /**
+   * Procesa mensajes de mediciones de turbinas
+   */
+  private handleTurbineMessage(turbineId: string, message: MqttTurbineMessage): void {
+    if (this.onTurbineDataCallback) {
+      this.onTurbineDataCallback(turbineId, message);
+    }
+  }
+
+  /**
+   * Procesa mensajes de alertas
+   */
+  private handleAlertMessage(message: MqttAlertMessage): void {
+    if (this.onAlertCallback) {
+      this.onAlertCallback(message);
+    }
+  }
+
+  /**
+   * Procesa mensajes de estadísticas
+   */
+  private handleStatsMessage(message: MqttStatsMessage): void {
+    if (this.onStatsCallback) {
+      this.onStatsCallback(message);
+    }
+  }
+
+  /**
+   * Maneja reconexión automática
+   */
+  private handleReconnect(): void {
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++;
+      console.log(`Reintentando conexión (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+      setTimeout(() => this.connect(), this.options.reconnectPeriod);
+    } else {
+      console.error('Máximo de reintentos de conexión alcanzado');
+    }
+  }
+
+  /**
+   * Desconecta del broker
+   */
+  disconnect(): void {
+    if (this.client) {
+      // this.client.end();
+      this.connected = false;
+      if (this.onConnectionChangeCallback) {
+        this.onConnectionChangeCallback(false);
+      }
+      console.log('Desconectado del broker MQTT');
+    }
+  }
+
+  /**
+   * Registra callback para datos de turbinas
+   */
+  onTurbineData(callback: (turbineId: string, data: MqttTurbineMessage) => void): void {
+    this.onTurbineDataCallback = callback;
+  }
+
+  /**
+   * Registra callback para alertas
+   */
+  onAlert(callback: (alert: MqttAlertMessage) => void): void {
+    this.onAlertCallback = callback;
+  }
+
+  /**
+   * Registra callback para estadísticas
+   */
+  onStats(callback: (stats: MqttStatsMessage) => void): void {
+    this.onStatsCallback = callback;
+  }
+
+  /**
+   * Registra callback para cambios de conexión
+   */
+  onConnectionChange(callback: (connected: boolean) => void): void {
+    this.onConnectionChangeCallback = callback;
+  }
+
+  /**
+   * Publica un mensaje en un tópico (para comandos/control)
+   */
+  publish(topic: string, message: any): void {
+    if (!this.connected) {
+      console.error('No conectado al broker MQTT');
+      return;
+    }
+    
+    try {
+      const payload = JSON.stringify(message);
+      // this.client.publish(topic, payload, { qos: 1 });
+      console.log('Mensaje publicado en', topic, ':', message);
+    } catch (error) {
+      console.error('Error publicando mensaje:', error);
+    }
+  }
+
+  /**
+   * Verifica si está conectado
+   */
+  isConnected(): boolean {
+    return this.connected;
+  }
+}
+
+// Instancia singleton del servicio MQTT
+let mqttServiceInstance: MqttService | null = null;
+
+export const getMqttService = (
+  brokerUrl?: string,
+  options?: any
+): MqttService => {
+  if (!mqttServiceInstance) {
+    mqttServiceInstance = new MqttService(brokerUrl, options);
+  }
+  return mqttServiceInstance;
+};
