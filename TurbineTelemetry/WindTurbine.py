@@ -53,7 +53,6 @@ class WindTurbine:
             "generated_current_a": round(random.uniform(10.0, 200.0), 2),         # Corriente generada en A
             "active_power_kw": round(random.uniform(50.0, 500.0), 2),             # Potencia activa en kW
             "reactive_power_kvar": round(random.uniform(10.0, 300.0), 2),         # Potencia reactiva en kVAR
-            "output_frequency_hz": round(random.uniform(49.5, 50.5), 2),
             # Estado del sistema 
             "operational_state": "active" # por ahora siempre activo
             #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])

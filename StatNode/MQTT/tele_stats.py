@@ -1,43 +1,53 @@
-"""
-- Calculos por turbina, parque o periodo:
+from datetime import datetime, timedelta
+import time
 
-* Estadistica descriptiva
-- Media, mediana, desviación estándar
-- Minimos y maximos por variable
-- Percentiles (p25, p75) ?? 
+from StatNode.DB.TelemetryDB import TelemetryDB
 
-* Analisis temporal
-- Tendencias por hora/dia/semana
-- Correlacion entre variables 
-    - Viento vs voltaje
-    
-* Alertas / Deteccion de umbrales --> Delegar al broker? Que republique en el topico de alertas?? 
-- Valores fuera de rango --> Definir
-- Alertas por temperatura, vibracion o presion, etc
-"""
-
-from typing import Dict, List
-from Shared.MongoSingleton import MongoSingleton
-
-"""
-1. Una sola consulta - traer toda la data de un parque eolico
-2. Realizar calculos 
-
-"""
-
-class StadisticalHelper:
+class StatisticalHelper:
     def __init__(self):
-        self.mongo_client = MongoSingleton.get_singleton_client()
-    
-    def get_stats_turbine(self, turbine_id: str, minutes: int = 5, fields: List[str] = ("wind_speed_mps",)) -> Dict[str, Any]:
-        return self.db.get_window_stats(turbine_id=turbine_id, minutes=minutes, fields=list(fields))
+        self.db_service = TelemetryDB()
 
-    def get_stats_farm(self, farm_id: str, minutes: int = 5, fields: List[str] = ("wind_speed_mps",)) -> Dict[str, Any]:
-        return self.db.get_window_stats_for_farm(farm_id=farm_id, minutes=minutes, fields=list(fields))
-    
-    
-    
-    
-    
-    
+    def get_stadistics(self):
+        metrics_per_turbine = self.get_metrics_per_turbine(
+            farm_id=1,
+            minutes=5,
+            rotor_radius_m=40.0  # radio constante
+        )
 
+        print(f"Metricas por turbina: {metrics_per_turbine}\n")
+
+        metrics_farm = self.get_metrics_aggregate(
+            farm_id=1,
+            minutes=5,
+            rotor_radius_m=40.0  # radio constante
+        )
+        
+        print(f"Metricas por farm-{1}: {metrics_per_turbine}\n")
+
+
+        
+if __name__ == '__main__':
+    helper = StatisticalHelper()
+    for i in range(0, 3): 
+        helper.get_stadistics()
+        time.sleep(10)
+        
+    print("MAIN estadisticas finalizado!")
+
+"""
+# Metrics per turbine (una sola consulta para todo el farm_id=1)
+per_turb = db.get_metrics_per_turbine(farm_id=1, minutes=5, rotor_radius_m=40.0)
+print(per_turb[10]["avg_wind"], per_turb[10]["energy_kwh"])
+
+# Aggregated farm metrics (una sola consulta)
+agg = db.get_metrics_aggregate(farm_id=1, minutes=5, rotor_radius_m=40.0)
+print(agg["avg_wind"], agg["energy_kwh"])
+
+radios constantes
+db.get_metrics_per_turbine(
+    farm_id=1,
+    minutes=5,
+    rotor_radius_m=40.0  # <-- radio constante
+)
+
+"""
