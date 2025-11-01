@@ -1,3 +1,4 @@
+import math
 import random
 import threading
 import time
@@ -20,42 +21,73 @@ class WindTurbine:
         # cliente mqtt con id unico
         str_turbine_id = f"T-00{self.turbine_id}" # T-001, T-002, etc 
         self.mqtt_client = GenericMQTTClient(client_id=str_turbine_id) 
-        self.publish_interval = 5 # segundos
+        self.publish_interval = 10 # segundos
         self._stop_event = threading.Event()
         self._thread = None
 
     def get_telemetry_data(self) -> dict:
-        # Genera datos de turbina 
+        capacity_mw: float = 2.5
+        
+        states = ["operational", "maintenance", "standby", "fault", "stopped"]
+        weights = [0.8, 0.08, 0.06, 0.03, 0.03]
+        state = random.choices(states, weights=weights, k=1)[0]
+        is_active = state == "operational"
+
+        # Entorno
+        wind_speed_mps = round(3.0 + random.random() * 22.0, 2) if is_active else round(random.uniform(0.0, 6.0), 2)
+        wind_direction_deg = random.randint(0, 359)
+
+        # Mecánicas
+        rotor_speed_rpm = round(10 + random.random() * 20, 2) if is_active else 0.0
+        blade_pitch_angle_deg = round(random.uniform(0, 30), 2) if is_active else 90.0
+        yaw_position_deg = round(random.uniform(0, 360), 2)
+        vibrations_mms = round(random.uniform(0.1, 5.0), 2) if is_active else 0.0
+        gear_temperature_c = round(40 + random.random() * 30, 1) if is_active else round(25 + random.random() * 5, 1)
+        bearing_temperature_c = round(35 + random.random() * 30, 1) if is_active else round(25 + random.random() * 5, 1)
+
+        # Eléctricas
+        capacity_kw = capacity_mw * 1000
+        p_frac = min(max(wind_speed_mps / 25.0, 0.0), 1.0) if is_active else 0.0
+        p_factor = 0.6 + random.random() * 0.4
+        active_power_kw = round(capacity_kw * p_frac * p_factor, 2) if is_active else 0.0
+
+        pf = 0.95 if is_active else 0.0
+        output_voltage_v = 400.0 if is_active else 0.0
+        generated_current_a = round(
+            (active_power_kw * 1000) / (output_voltage_v * math.sqrt(3) * pf),
+            2
+        ) if (is_active and output_voltage_v and pf) else 0.0
+
+        reactive_power_kvar = round(active_power_kw * 0.3, 2) if is_active else 0.0
+
         return {
-            # Datos identificacion 
+            # Identificacion
             "farm_id": self.farm_id,
             "farm_name": f"Farm-00{self.farm_id}",
             "turbine_id": self.turbine_id,
             "turbine_name": f"T-00{self.turbine_id}",
 
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            # Variables entorno
-            "wind_speed_mps": round(random.uniform(3.0, 25.0), 2),
-            "wind_direction_deg": random.randint(0, 360),
-            "ambience_temperature": random.randint(-10, 20),
-            "atmospheric_pressure_hpa": round(random.uniform(980, 1030), 1),
-            # Variables mecanicas 
-            "rotor_speed_rpm": round(random.uniform(10, 20), 2),
-            "blade_pitch_angle_deg": round(random.uniform(0, 30), 1),
-            "yaw_position_deg": round(random.uniform(0.0, 360.0), 2),              # grados
-            "vibrations_mms": round(random.uniform(0.1, 5.0), 2),                  # mm/s
-            "gear_temperature_c": round(random.uniform(30.0, 90.0), 1),           # °C
-            "bearing_temperature_c": round(random.uniform(25.0, 80.0), 1),        # °C
-            "oil_pressure_bar": round(random.uniform(1.0, 10.0), 2),              # bar
-            "oil_level_percent": round(random.uniform(20.0, 100.0), 1),
-            # Variables electricas
-            "output_voltage_v": round(random.uniform(380.0, 420.0), 1),           # Voltaje de salida en V
-            "generated_current_a": round(random.uniform(10.0, 200.0), 2),         # Corriente generada en A
-            "active_power_kw": round(random.uniform(50.0, 500.0), 2),             # Potencia activa en kW
-            "reactive_power_kvar": round(random.uniform(10.0, 300.0), 2),         # Potencia reactiva en kVAR
-            # Estado del sistema 
-            "operational_state": "active" # por ahora siempre activo
-            #"operational_state": random.choice(["active", "stopped", "fault", "maintenance"])
+
+            # Variables
+            "wind_speed_mps": wind_speed_mps,
+            "wind_direction_deg": wind_direction_deg,
+            "rotor_speed_rpm": rotor_speed_rpm,
+            "blade_pitch_angle_deg": blade_pitch_angle_deg,
+            "yaw_position_deg": yaw_position_deg,
+            "vibrations_mms": vibrations_mms,
+            "gear_temperature_c": gear_temperature_c,
+            "bearing_temperature_c": bearing_temperature_c,
+            "output_voltage_v": round(output_voltage_v, 1),
+            "generated_current_a": generated_current_a,
+            "active_power_kw": active_power_kw,
+            "reactive_power_kvar": reactive_power_kvar,
+
+            # Estado
+            "operational_state": state,
+
+            # Info extra
+            "capacity_mw": capacity_mw
         }
         
         
