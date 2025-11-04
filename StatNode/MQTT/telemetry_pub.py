@@ -14,11 +14,11 @@ Publicaciones de:
 # --- PLANTILLA TOPICOS MQTT ---
 PROC_TELEMETRY_TOPIC = "farms/{farm_id}/proc_telemetry"
 
-class ProcessedTelemetryPublisher:
-    def __init__(self, farm_id: int, publish_interval: int = 30):
+class TelemetryPublisher:
+    def __init__(self, client_id: str, farm_id: int, publish_interval: int = 30):
         self.farm_id = farm_id
         self.publish_interval = publish_interval
-        self.mqtt_client = GenericMQTTClient(client_id=f"pub-stats-{farm_id}")
+        self.mqtt_client = GenericMQTTClient(client_id=client_id)
         self.db_service = TelemetryDB()  # usa el mismo conector singleton
         self._stop_event = threading.Event()
 
@@ -27,20 +27,9 @@ class ProcessedTelemetryPublisher:
         return PROC_TELEMETRY_TOPIC.format(farm_id=self.farm_id)
 
     # hilo ppal publicacion
-    def start(self):
+    def run(self):
         self.mqtt_client.connect()
-        thread = threading.Thread(target=self._publish_loop, daemon=True)
-        thread.start()
         print(f"[Publisher] Comienzo publisher telemetria procesada - Farm-{self.farm_id}\n")
-        try:
-            while not self._stop_event.is_set():
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("[Publisher] Stopping...")
-            self._stop_event.set()
-            self.mqtt_client.disconnect()
-
-    def _publish_loop(self):
         time.sleep(10)  # espera inicial para que haya datos en DB
         while not self._stop_event.is_set():
             
@@ -68,10 +57,13 @@ class ProcessedTelemetryPublisher:
 
             print(f"[Publisher] Published processed metrics to '{topic}' at {payload['generated_at']}")
 
-            time.sleep(self.publish_interval)
+            self._stop_event.wait(self.publish_interval)
 
+    def stop(self):
+        self._stop_event.set()
+        self.mqtt_client.disconnect()
 
 if __name__ == "__main__":
     # Una instancia por parque eolico 
-    publisher = ProcessedTelemetryPublisher(farm_id=1)
-    publisher.start()
+    publisher = TelemetryPublisher(client_id="TestPub", farm_id=1)
+    publisher.run()

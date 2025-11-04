@@ -5,19 +5,18 @@ from typing import Optional, List, Dict, Any
 
 from pymongo.errors import PyMongoError
 
-from Shared.MongoSingleton import MongoSingleton
 from Shared.GenericMongoClient import GenericMongoClient
 
 DEFAULT_AIR_DENSITY = 1.225  # kg/m^3
 TIMESTAMP_STR_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 class TelemetryDB:
-    def __init__(self, mongo_client: Optional[GenericMongoClient] = None, db_name: str = "test_db"):
-        if mongo_client is None:
-            self.mongo = MongoSingleton.get_singleton_client(db_name=db_name)
-        else:
-            self.mongo = mongo_client
-        
+    def __init__(self, db_name: str = "windfarm_db"):
+        # Creamos una instancia de GenericMongoClient que leerá la variable de entorno MONGO_URI
+        # y se conectará a la base de datos correcta dentro de la red de Docker.
+        self.mongo = GenericMongoClient(db_name=db_name)
+        # La conexión se establece explícitamente.
+        self.mongo.connect()
 
     def _ensure_numeric_fields(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -340,4 +339,3 @@ class TelemetryDB:
         }
 
         return result
-

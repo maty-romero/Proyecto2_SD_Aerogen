@@ -1,6 +1,8 @@
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from pymongo.errors import ConnectionFailure, PyMongoError
+from pymongo.errors import ConnectionFailure, PyMongoError, ServerSelectionTimeoutError
+import time
+import os
 
 
 class GenericMongoClient:
@@ -8,23 +10,33 @@ class GenericMongoClient:
     Clase genérica para conectarse a MongoDB usando pymongo.
     Permite operaciones básicas de inserción, consulta y actualización.
     """
-    def __init__(self, uri: str = "mongodb://localhost:27017", db_name: str = "test_db"):
+    #def __init__(self, uri: str = "mongodb://localhost:27017", db_name: str = "test_db"):
+    def __init__(self, uri: str = os.environ.get("MONGO_URI", "mongodb://localhost:27017"), db_name: str = "test_db"):
         self.uri = uri
         self.db_name = db_name
         self.client: MongoClient = None
         self.db = None
 
-    def connect(self):
-        """Conecta al servidor MongoDB y selecciona la base de datos."""
-        try:
-            self.client = MongoClient(self.uri)
-            # Test de conexión rápida
-            self.client.admin.command("ping")
-            self.db = self.client[self.db_name]
-            print(f"[MongoDB] Conectado a {self.db_name} en {self.uri}")
-        except ConnectionFailure as e:
-            print(f"[MongoDB] Error de conexión: {e}")
-            raise
+    def connect(self, max_retries: int = 5, retry_delay_s: int = 3):
+        """Conecta al servidor MongoDB con reintentos y selecciona la base de datos."""
+        retries = 0
+        while retries < max_retries:
+            try:
+                print(f"[MongoDB] Connecting to {self.uri}... (Attempt {retries + 1})")
+                # Usar serverSelectionTimeoutMS para que el ping no bloquee por mucho tiempo
+                self.client = MongoClient(self.uri, serverSelectionTimeoutMS=5000)
+                # Test de conexión rápida
+                self.client.admin.command("ping")
+                self.db = self.client[self.db_name]
+                print(f"[MongoDB] Connected to {self.db_name} at {self.uri}")
+                return # Conexión exitosa
+            except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+                print(f"[MongoDB] Connection failed: {e}. Retrying in {retry_delay_s}s...")
+                retries += 1
+                time.sleep(retry_delay_s)
+        
+        print(f"[MongoDB] Could not connect to database after {max_retries} attempts.")
+        raise ConnectionFailure(f"Failed to connect to MongoDB at {self.uri}")
 
     def get_collection(self, collection_name: str) -> Collection:
         """Obtiene una colección específica de la base de datos."""

@@ -16,10 +16,10 @@ from StatNode.DB.TelemetryDB import TelemetryDB
 RAW_TURBINE_TELEMETRY_TOPIC = "farms/{farm_id}/turbines/+/raw_telemetry" # suscription topic
 
 # Se asume 1 instancia Suscriptor por Farm  
-class RawTelemetrySuscriber:  
-    def __init__(self, farm_id: int):
+class TelemetrySubscriber:  
+    def __init__(self, client_id: str, farm_id: int):
         self.farm_id = farm_id 
-        self.mqtt_client = GenericMQTTClient(client_id="RawTelemSub-Farm"+str(farm_id)) 
+        self.mqtt_client = GenericMQTTClient(client_id=client_id) 
         self.db_service = TelemetryDB() # Servicio DB  
         # ---> Resto de la configuracion
     
@@ -27,20 +27,14 @@ class RawTelemetrySuscriber:
     def get_topic_telem_raw(self, farm_id: int) -> str: 
         return RAW_TURBINE_TELEMETRY_TOPIC.format(farm_id=farm_id)
     
-    def start(self):
+    def run(self):
         self.mqtt_client.connect()
        
         self.mqtt_client.subscribe(
             self.get_topic_telem_raw(self.farm_id), 
             self._message_callback
         )
-        
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.mqtt_client.disconnect()
-    
+        # El bucle principal se maneja en main.py, aquí solo nos aseguramos de que el cliente MQTT siga corriendo.
     
     def _message_callback(self, client, userdata, msg):
         payload = msg.payload.decode()
@@ -54,10 +48,14 @@ class RawTelemetrySuscriber:
             data = payload
         except Exception as e:
             print(f"Error genérico: {e}\n")
-        
+
+    def stop(self):
+        self.mqtt_client.disconnect()
     
 if __name__ == '__main__':
     # Se asume 1 instancia por Farm
-    sub = RawTelemetrySuscriber(farm_id=1)
-    sub.start()
+    sub = TelemetrySubscriber(client_id="TestSub", farm_id=1)
+    sub.run()
+    # Mantener vivo para pruebas
+    while True: time.sleep(1)
     

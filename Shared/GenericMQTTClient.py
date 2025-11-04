@@ -1,9 +1,12 @@
 import json
 import time
 import paho.mqtt.client as mqtt
+import os
 
 # -- Constantes configuracion
-BROKER_HOST = "localhost"
+# Si corremos en Docker, usamos el nombre del servicio. Si no, localhost.
+#BROKER_HOST = "localhost"
+BROKER_HOST = os.environ.get("MQTT_BROKER_HOST", "localhost")
 BROKER_PORT = 1883
 
 class GenericMQTTClient:
@@ -36,11 +39,23 @@ class GenericMQTTClient:
             payload = json.dumps(payload)
         self.client.will_set(topic, payload=payload, qos=qos, retain=retain)
 
-    def connect(self, keepalive: int = 60):
-        """Conecta y arranca el loop. Asume que set_lwt() (si se necesita) fue llamado antes."""
-        print(f"[MQTT:{self._client_id}] connecting to {self.broker_host}:{self.broker_port} ...")
-        self.client.connect(self.broker_host, self.broker_port, keepalive=keepalive)
-        self.client.loop_start()
+    def connect(self, keepalive: int = 60, max_retries: int = 5, retry_delay_s: int = 3):
+        """
+        Conecta y arranca el loop, con reintentos en caso de fallo inicial.
+        Asume que set_lwt() (si se necesita) fue llamado antes.
+        """
+        retries = 0
+        while retries < max_retries:
+            try:
+                print(f"[MQTT:{self._client_id}] connecting to {self.broker_host}:{self.broker_port} ... (Attempt {retries + 1})")
+                self.client.connect(self.broker_host, self.broker_port, keepalive=keepalive)
+                self.client.loop_start()
+                return  # Conexión exitosa
+            except ConnectionRefusedError as e:
+                print(f"[MQTT:{self._client_id}] Connection refused. Retrying in {retry_delay_s}s...")
+                retries += 1
+                time.sleep(retry_delay_s)
+        raise ConnectionRefusedError(f"Failed to connect to MQTT broker after {max_retries} attempts.")
 
     def publish(self, topic: str, payload, qos: int = 0, retain: bool = False):
         """
@@ -97,5 +112,3 @@ except KeyboardInterrupt:
     mqtt_sub.disconnect()
 
 """
-
-
