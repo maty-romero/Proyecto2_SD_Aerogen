@@ -1,0 +1,63 @@
+rule_engine {
+  ignore_sys_message = true
+  jq_function_default_timeout = "10s"
+  rules {
+    rule_bearing_temperature {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = "1"
+            retain = false
+            topic = "farms/${farm_id}/alerts/turbines/${turbine_id}"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = ""
+      metadata {created_at = 1762296497770}
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          payload.bearing_temperature_c AS bearing_temperature_c,
+          payload.timestamp AS timestamp,
+          'Bearing temperature in critical levels' AS message
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.bearing_temperature_c > 90~"""
+    }
+    rule_gear_temperature {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts/turbines/${turbine_id} "
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = ""
+      enable = true
+      metadata {created_at = 1762295635867}
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          payload.gear_temperature_c AS gear_temperature_c,
+          payload.timestamp AS timestamp,
+          'Gear temperature in critical levels' as message
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.gear_temperature_c > 100~"""
+    }
+  }
+}
