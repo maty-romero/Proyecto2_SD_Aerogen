@@ -79,38 +79,36 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
    * Maneja actualizaciones de datos de turbinas desde MQTT
    */
   const handleTurbineUpdate = useCallback((
-    turbineId: string, 
-    message: MqttTurbineMessage,
-    metadata?: { name: string; capacity: number }
-  ) => {
-    setData(prev => {
-      const turbines = new Map(prev.turbines);
-      
-      // Obtener turbina existente o crear una nueva
-      const existingTurbine = turbines.get(turbineId);
-      
-      const updatedTurbine: Turbine = {
-        id: turbineId,
-        name: metadata?.name || existingTurbine?.name || `Turbina ${turbineId}`,
-        status: message.status,
-        capacity: metadata?.capacity || existingTurbine?.capacity || 2.5,
-        environmental: message.environmental,
-        mechanical: message.mechanical,
-        electrical: message.electrical,
-        lastMaintenance: existingTurbine?.lastMaintenance || '',
-        nextMaintenance: existingTurbine?.nextMaintenance || '',
-        operatingHours: existingTurbine?.operatingHours || 0,
-      };
-      
-      turbines.set(turbineId, updatedTurbine);
-      
-      return {
-        ...prev,
-        turbines,
-        lastUpdate: new Date(),
-      };
-    });
-  }, []);
+  turbineId: string, 
+  message: MqttTurbineMessage,
+  metadata?: { name: string; capacity: number }
+) => {
+  setData(prev => {
+    const turbines = new Map(prev.turbines);
+    
+    // Siempre crear/sobrescribir la turbina completa
+    const updatedTurbine: Turbine = {
+      id: turbineId,
+      name: metadata?.name || `Turbina ${turbineId}`,
+      capacity: metadata?.capacity || 2.5,
+      status: message.status,
+      environmental: message.environmental,
+      mechanical: message.mechanical,
+      electrical: message.electrical,
+      lastMaintenance: 'N/A',
+      nextMaintenance: 'N/A',
+      operatingHours: 0,
+    };
+    
+    turbines.set(turbineId, updatedTurbine);
+    
+    return {
+      ...prev,
+      turbines,
+      lastUpdate: new Date(),
+    };
+  });
+}, []);
 
   /**
    * Maneja nuevas alertas desde MQTT

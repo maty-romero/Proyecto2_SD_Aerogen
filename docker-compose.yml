@@ -53,6 +53,33 @@ services:
     networks:
       - windfarm_net
 
+  frontend_debugger:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    container_name: windfarm_frontend_debugger
+    command: python -m StatNode.debug_client
+    depends_on:
+      - emqx
+    environment:
+      - MQTT_BROKER_HOST=emqx
+    networks:
+      - windfarm_net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: windfarm_frontend
+    ports:
+      # Mapea el puerto 8080 de tu máquina al puerto 80 del contenedor Nginx
+      - "8080:80"
+    env_file:
+      - .env.frontend
+    depends_on:
+      - emqx # Asegura que el broker inicie antes, aunque la conexión es desde el navegador.
+    networks:
+      - windfarm_net
 networks:
   windfarm_net:
     driver: bridge

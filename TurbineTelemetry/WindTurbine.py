@@ -15,7 +15,7 @@ class WindTurbine:
         self.turbine_id = turbine_id
         self.farm_id = farm_id
         
-        self.telemetry_topic = f"farms/{farm_id}/turbines/{turbine_id}/raw_telemetry"
+        self.telemetry_topic = f"windfarm/turbines/{self.turbine_id}/measurements"
         self.status_topic = TOPIC_STATUS_TEMPLATE.format(farm_id=farm_id, turbine_id=turbine_id)
         
         # cliente mqtt con id unico
