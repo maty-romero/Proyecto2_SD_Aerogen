@@ -1,21 +1,4 @@
 authentication = []
-authorization {
-  cache {
-    enable = true
-    excludes = []
-    max_size = 32
-    ttl = "1m"
-  }
-  deny_action = ignore
-  no_match = allow
-  sources = [
-    {
-      enable = true
-      path = "${EMQX_ETC_DIR}/acl.conf"
-      type = file
-    }
-  ]
-}
 rule_engine {
   ignore_sys_message = true
   jq_function_default_timeout = "10s"

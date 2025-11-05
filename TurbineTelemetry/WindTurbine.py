@@ -99,7 +99,13 @@ class WindTurbine:
         3. loop envio de telemetría 
         """
         # En caso de caida de la turbina
-        lwt_payload = {"turbine_id": self.turbine_id, "state": "offline"}
+        lwt_payload = {
+            "farm_id": self.farm_id,
+            "farm_name": f"Farm-00{self.farm_id}",
+            "turbine_id": self.turbine_id,
+            "turbine_name": f"T-00{self.turbine_id}",
+            "state": "offline"   
+        }
         self.mqtt_client.set_lwt(self.status_topic, lwt_payload, qos=1, retain=True)
 
         self.mqtt_client.connect()

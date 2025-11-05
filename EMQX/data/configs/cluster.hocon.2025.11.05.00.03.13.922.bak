@@ -9,6 +9,7 @@ authorization {
   deny_action = ignore
   no_match = allow
   sources = [
+    {type = built_in_database},
     {
       enable = true
       path = "${EMQX_ETC_DIR}/acl.conf"

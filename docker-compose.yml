@@ -14,6 +14,17 @@ services:
     networks:
       - windfarm_net
 
+  # auth_node:
+  #     build: 
+  #       context: ./AuthNode   # carpeta base del proyecto Flask
+  #       dockerfile: Dockerfile
+  #     container_name: flask_api_auth
+  #     ports:
+  #       - "5000:5000" 
+  #     environment:
+  #       - FLASK_APP=server.py
+  #       - FLASK_ENV=development
+
   # mongo:
   #   image: mongo:latest
   #   container_name: mongo_windfarm
