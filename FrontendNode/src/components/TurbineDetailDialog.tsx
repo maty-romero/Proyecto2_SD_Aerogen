@@ -28,13 +28,15 @@ import { Turbine } from '../types/turbine';
 import { getStatusLabel, getStatusColor } from '../utils/turbineData';
 
 interface TurbineDetailDialogProps {
-  turbine: Turbine | null;
+  turbineId: string | null;
+  turbinesMap: Map<string, Turbine>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 // Mock historical data for the turbine
 const generateHistoricalData = () => {
+  // NOTA: Esto debería ser reemplazado por datos reales de la API en el futuro.
   return Array.from({ length: 24 }, (_, i) => ({
     time: `${String(i).padStart(2, '0')}:00`,
     power: 1500 + Math.random() * 1000,
@@ -62,8 +64,10 @@ const getStatusBadge = (status: Turbine['status']) => {
   );
 };
 
-export function TurbineDetailDialog({ turbine, open, onOpenChange }: TurbineDetailDialogProps) {
-  if (!turbine) return null;
+export function TurbineDetailDialog({ turbineId, turbinesMap, open, onOpenChange }: TurbineDetailDialogProps) {
+  const turbine = turbineId ? turbinesMap.get(turbineId) : null;
+
+  if (!turbine || !turbineId) return null;
 
   const historicalData = generateHistoricalData();
   const powerMW = turbine.electrical.activePower / 1000;

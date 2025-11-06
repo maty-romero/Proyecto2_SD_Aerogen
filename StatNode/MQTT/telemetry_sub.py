@@ -13,7 +13,7 @@ from Shared.MongoSingleton import MongoSingleton
 from StatNode.DB.TelemetryDB import TelemetryDB 
 
 # --- PLANTILLA TOPICOS MQTT ---
-RAW_TURBINE_TELEMETRY_TOPIC = "windfarm/turbines/+/measurements" # suscription topic
+RAW_TURBINE_TELEMETRY_TOPIC = "windfarm/turbines/+/clean_telemetry" # suscription topic
 
 # Se asume 1 instancia Suscriptor por Farm  
 class TelemetrySubscriber:  

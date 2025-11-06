@@ -2,64 +2,7 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { AlertTriangle, Info, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { ScrollArea } from './ui/scroll-area';
-
-// Mock alerts data with more technical details
-const alerts = [
-  {
-    id: 1,
-    type: 'warning',
-    turbine: 'WT-007',
-    message: 'Mantenimiento preventivo programado',
-    details: 'Revisión de sistema hidráulico de pitch',
-    timestamp: '2025-10-28 08:30',
-    status: 'pending',
-  },
-  {
-    id: 2,
-    type: 'warning',
-    turbine: 'WT-015',
-    message: 'Temperatura del engranaje elevada',
-    details: 'Temp. actual: 72°C (límite: 70°C)',
-    timestamp: '2025-10-28 09:15',
-    status: 'pending',
-  },
-  {
-    id: 3,
-    type: 'error',
-    turbine: 'WT-003',
-    message: 'Vibración excesiva detectada',
-    details: 'Vibración: 3.2 mm/s (límite: 2.5 mm/s)',
-    timestamp: '2025-10-28 10:05',
-    status: 'pending',
-  },
-  {
-    id: 4,
-    type: 'info',
-    turbine: 'General',
-    message: 'Actualización del sistema SCADA completada',
-    details: 'Versión 2.4.1 instalada exitosamente',
-    timestamp: '2025-10-28 06:00',
-    status: 'resolved',
-  },
-  {
-    id: 5,
-    type: 'success',
-    turbine: 'WT-012',
-    message: 'Calibración de sensores completada',
-    details: 'Anemómetro y veleta recalibrados',
-    timestamp: '2025-10-27 16:45',
-    status: 'resolved',
-  },
-  {
-    id: 6,
-    type: 'info',
-    turbine: 'WT-019',
-    message: 'Nivel de aceite bajo',
-    details: 'Nivel actual: 78% (recomendado: >85%)',
-    timestamp: '2025-10-27 14:20',
-    status: 'pending',
-  },
-];
+import { Alert } from '../types/turbine';
 
 const getAlertIcon = (type: string) => {
   switch (type) {
@@ -92,10 +35,11 @@ const getAlertBadge = (type: string) => {
 };
 
 interface AlertsPanelProps {
+  alerts: Alert[];
   compact?: boolean;
 }
 
-export function AlertsPanel({ compact = false }: AlertsPanelProps) {
+export function AlertsPanel({ alerts, compact = false }: AlertsPanelProps) {
   const displayAlerts = compact ? alerts.filter(a => a.status === 'pending') : alerts;
 
   return (
@@ -133,7 +77,7 @@ export function AlertsPanel({ compact = false }: AlertsPanelProps) {
                 <div className="flex-1 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-slate-900 dark:text-slate-100 text-sm">{alert.message}</p>
+                      <p className="text-slate-900 dark:text-slate-100 text-sm">{alert.message}</p> 
                       <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">{alert.turbine}</p>
                       {alert.details && (
                         <p className="text-slate-600 dark:text-slate-300 text-xs mt-1 italic">{alert.details}</p>

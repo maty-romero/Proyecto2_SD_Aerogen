@@ -1,50 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { WindFarmOverview } from './components/WindFarmOverview';
 import { TurbineGrid } from './components/TurbineGrid';
 import { ProductionCharts } from './components/ProductionCharts';
 import { AlertsPanel } from './components/AlertsPanel';
 import { Heatmaps } from './components/Heatmaps';
 import { ThemeProvider, useTheme } from './components/ThemeProvider';
+import { MqttConnection } from './components/MqttConnection';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Button } from './components/ui/button';
-import { Wind, Sun, Moon, RefreshCw } from 'lucide-react';
-import { generateTurbineData } from './utils/turbineData';
+import { Wind, Sun, Moon } from 'lucide-react';
+import { useWindFarmData } from './hooks/useWindFarmData';
 
 function AppContent() {
   const [selectedTab, setSelectedTab] = useState('overview');
   const { theme, toggleTheme } = useTheme();
-  const turbines = generateTurbineData();
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [updateText, setUpdateText] = useState<string>('');
 
-  // Simular actualizaciones periódicas
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLastUpdate(new Date());
-    }, 5000); // Actualizar cada 5 segundos
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Calcular texto de última actualización
-  useEffect(() => {
-    const updateTimer = setInterval(() => {
-      const now = new Date();
-      const diffInSeconds = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000);
-      
-      if (diffInSeconds < 60) {
-        setUpdateText(`hace ${diffInSeconds}s`);
-      } else if (diffInSeconds < 3600) {
-        const minutes = Math.floor(diffInSeconds / 60);
-        setUpdateText(`hace ${minutes}m`);
-      } else {
-        const hours = Math.floor(diffInSeconds / 3600);
-        setUpdateText(`hace ${hours}h`);
-      }
-    }, 1000);
-
-    return () => clearInterval(updateTimer);
-  }, [lastUpdate]);
+  const {
+    turbines,
+    turbinesList,
+    alerts,
+    farmStats,
+    hourlyProduction,
+    isConnected,
+    loading,
+    error,
+    lastUpdate,
+    connect,
+    disconnect,
+  } = useWindFarmData({ autoConnect: true });
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
@@ -62,10 +45,13 @@ function AppContent() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg">
-                <RefreshCw className="w-4 h-4" />
-                <span>Última actualización: {updateText}</span>
-              </div>
+              <MqttConnection
+                isConnected={isConnected}
+                onConnect={connect}
+                onDisconnect={disconnect}
+                error={error}
+                lastUpdate={lastUpdate}
+              />
               <Button
                 variant="outline"
                 size="icon"
@@ -84,42 +70,42 @@ function AppContent() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-6">
+      <main className="container mx-auto px-6 py-6 space-y-6">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="overview">Vista General</TabsTrigger>
             <TabsTrigger value="turbines">Turbinas</TabsTrigger>
             <TabsTrigger value="analytics">Análisis</TabsTrigger>
             <TabsTrigger value="production">Producción</TabsTrigger>
-            <TabsTrigger value="alerts">Alertas</TabsTrigger>
+            <TabsTrigger value="alerts">Panel de Alertas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <WindFarmOverview />
+            <WindFarmOverview farmStats={farmStats} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <ProductionCharts compact />
+                <ProductionCharts hourlyProduction={hourlyProduction} compact />
               </div>
               <div>
-                <AlertsPanel compact />
+                <AlertsPanel alerts={alerts} compact />
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="turbines" className="space-y-6">
-            <TurbineGrid />
+            <TurbineGrid turbinesList={turbinesList} turbinesMap={turbines} isLoading={loading} />
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
-            <Heatmaps turbines={turbines} />
+            <Heatmaps turbinesList={turbinesList} />
           </TabsContent>
 
           <TabsContent value="production" className="space-y-6">
-            <ProductionCharts />
+            <ProductionCharts hourlyProduction={hourlyProduction} />
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
-            <AlertsPanel />
+            <AlertsPanel alerts={alerts} />
           </TabsContent>
         </Tabs>
       </main>

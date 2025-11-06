@@ -115,7 +115,7 @@ export class MqttService {
     if (!this.connected) return;
 
     // Suscribirse a mediciones de todas las turbinas
-    this.subscribe('windfarm/turbines/+/measurements');
+    this.subscribe('windfarm/turbines/+/clean_telemetry');
     
     // Suscribirse a alertas
     this.subscribe('windfarm/alerts');
@@ -280,15 +280,15 @@ export class MqttService {
       const message = JSON.parse(payload.toString());
       
       // Procesar según el tópico
-      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/measurements')) {
+      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/clean_telemetry')) {
         // Mensaje plano del molino - transformar antes de procesar
         const flatMsg = message as MqttFlatMessage;
         const turbineId = String(flatMsg.turbine_id);
+        const structuredMessage = this.transformFlatMessage(flatMsg);
         const metadata = {
           name:  flatMsg.turbine_name,
           capacity: flatMsg.capacity_mw
         };
-         const structuredMessage = this.transformFlatMessage(flatMsg);
         this.handleTurbineMessage(turbineId, structuredMessage, metadata);
       } else if (topic === 'windfarm/alerts') {
         // Mensaje plano de alerta - transformar antes de procesar

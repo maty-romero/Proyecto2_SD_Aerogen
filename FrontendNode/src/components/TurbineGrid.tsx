@@ -3,11 +3,14 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Wind, AlertTriangle, CheckCircle, XCircle, Pause, Clock } from 'lucide-react';
 import { TurbineDetailDialog } from './TurbineDetailDialog';
-import { generateTurbineData, getStatusLabel, getStatusColor } from '../utils/turbineData';
+import { getStatusColor } from '../utils/turbineData';
 import { Turbine } from '../types/turbine';
 
-const turbines = generateTurbineData();
-
+interface TurbineGridProps {
+  turbinesList: Turbine[];
+  turbinesMap: Map<string, Turbine>;
+  isLoading: boolean;
+}
 const getStatusIcon = (status: Turbine['status']) => {
   const iconClass = "w-3 h-3";
   switch (status) {
@@ -24,22 +27,23 @@ const getStatusIcon = (status: Turbine['status']) => {
   }
 };
 
-export function TurbineGrid() {
-  const [selectedTurbine, setSelectedTurbine] = useState<Turbine | null>(null);
+export function TurbineGrid({ turbinesList, turbinesMap, isLoading }: TurbineGridProps) {
+  const [selectedTurbineId, setSelectedTurbineId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const handleTurbineClick = (turbine: Turbine) => {
-    setSelectedTurbine(turbine);
+    setSelectedTurbineId(turbine.id);
     setDialogOpen(true);
   };
 
-  const statusCounts = {
-    operational: turbines.filter(t => t.status === 'operational').length,
-    maintenance: turbines.filter(t => t.status === 'maintenance').length,
-    fault: turbines.filter(t => t.status === 'fault').length,
-    stopped: turbines.filter(t => t.status === 'stopped').length,
-    standby: turbines.filter(t => t.status === 'standby').length,
-  };
+  const statusCounts = (turbinesList || []).reduce((acc, turbine) => {
+    acc[turbine.status] = (acc[turbine.status] || 0) + 1;
+    return acc;
+  }, {} as Record<Turbine['status'], number>);
+  
+  if (isLoading && (!turbinesList || turbinesList.length === 0)) {
+    return <div>Cargando turbinas...</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -49,17 +53,17 @@ export function TurbineGrid() {
           <p className="text-slate-500 dark:text-slate-400">Haz clic en una turbina para ver detalles completos</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {statusCounts.operational > 0 && (
+          {statusCounts.operational && (
             <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
               {statusCounts.operational} Operativas
             </Badge>
           )}
-          {statusCounts.maintenance > 0 && (
+          {statusCounts.maintenance && (
             <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
               {statusCounts.maintenance} Mantenimiento
             </Badge>
           )}
-          {statusCounts.fault > 0 && (
+          {statusCounts.fault && (
             <Badge className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
               {statusCounts.fault} Fallas
             </Badge>
@@ -69,7 +73,7 @@ export function TurbineGrid() {
 
       {/* Compact Grid View */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-        {turbines.map((turbine) => {
+        {(turbinesList || []).map((turbine) => {
           const colors = getStatusColor(turbine.status);
           const powerMW = turbine.electrical.activePower / 1000;
           
@@ -80,7 +84,7 @@ export function TurbineGrid() {
               onClick={() => handleTurbineClick(turbine)}
             >
               <div className="space-y-2">
-                {/* Header with icon */}
+                {/* Header with icon */ }
                 <div className="flex items-center justify-between">
                   <span className="text-slate-900 dark:text-slate-100 text-sm">{turbine.id}</span>
                   {getStatusIcon(turbine.status)}
@@ -125,7 +129,8 @@ export function TurbineGrid() {
 
       {/* Detail Dialog */}
       <TurbineDetailDialog 
-        turbine={selectedTurbine}
+        turbineId={selectedTurbineId}
+        turbinesMap={turbinesMap}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
