@@ -25,58 +25,68 @@ services:
   #       - FLASK_APP=server.py
   #       - FLASK_ENV=development
 
-  # mongo:
-  #   image: mongo:latest
-  #   container_name: mongo_windfarm
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongo_data:/data/db
-  #   networks:
-  #     - windfarm_net
-
-  # simulator:
-  #   build:
-  #     context: .
-  #     dockerfile: python.Dockerfile
-  #   container_name: windfarm_simulator
-  #   command: python -m TurbineTelemetry.main
-  #   depends_on:
-  #     - emqx
-  #   environment:
-  #     # El host del broker es el nombre del servicio 'emqx'
-  #     - MQTT_BROKER_HOST=emqx
-  #   networks:
-  #     - windfarm_net
-
-  # statnode:
-  #   build:
-  #     context: .
-  #     dockerfile: python.Dockerfile
-  #   container_name: windfarm_statnode
-  #   command: python -m StatNode.main # Usaremos un nuevo main.py
-  #   depends_on:
-  #     - emqx
-  #     - mongo
-  #   environment:
-  #     # El host del broker es el nombre del servicio 'emqx'
-  #     - MQTT_BROKER_HOST=emqx
-  #     # La URI de mongo apunta al servicio 'mongo'
-  #     - MONGO_URI=mongodb://mongo:27017
-  #   networks:
-  #     - windfarm_net
-
-  frontend_debugger:
-    build:
-      context: ./FrontendNode # Apuntamos al directorio del frontend
-      dockerfile: Dockerfile # Asumimos/creamos un Dockerfile aquí
-    container_name: windfarm_frontend_debugger
-    # El comando ahora instala dependencias y corre el dev server
-    command: sh -c "npm install && npm run dev"
+  mongo:
+    image: mongo:latest
+    container_name: mongo_windfarm
     ports:
-      - "8080:8080" # Exponemos el puerto 8080 definido en vite.config.ts
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
     networks:
       - windfarm_net
+
+  simulator:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    container_name: windfarm_simulator
+    command: python -m TurbineTelemetry.main
+    depends_on:
+      - emqx
+    environment:
+      # El host del broker es el nombre del servicio 'emqx'
+      - MQTT_BROKER_HOST=emqx
+    networks:
+      - windfarm_net
+
+  statnode:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    container_name: windfarm_statnode
+    command: python -m StatNode.main # Usaremos un nuevo main.py
+    depends_on:
+      - emqx
+      - mongo
+    environment:
+      # El host del broker es el nombre del servicio 'emqx'
+      - MQTT_BROKER_HOST=emqx
+      # La URI de mongo apunta al servicio 'mongo'
+      - MONGO_URI=mongodb://mongo:27017
+    networks:
+      - windfarm_net
+
+  # frontend_debugger:
+  #   build:
+  #     context: ./FrontendNode # Apuntamos al directorio del frontend
+  #     dockerfile: Dockerfile # Asumimos/creamos un Dockerfile aquí
+  #   container_name: windfarm_frontend_debugger
+  #   # El comando ahora instala dependencias y corre el dev server
+  #   command: sh -c "npm install && npm run dev"
+  #   ports:
+  #     - "8080:8080" # Exponemos el puerto 8080 definido en vite.config.ts
+  #   networks:
+  #     - windfarm_net
+  frontend_debugger:
+    build:
+      context: ./FrontendNode
+      dockerfile: Dockerfile
+    container_name: windfarm_frontend_debugger
+    ports:
+      - "8080:8080"
+    networks:
+      - windfarm_net
+
 
 networks:
   windfarm_net:

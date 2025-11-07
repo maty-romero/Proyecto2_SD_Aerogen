@@ -12,4 +12,6 @@ RUN npm install
 # Copiar el resto del código
 COPY . .
 
+EXPOSE 8080
 # El comando se proporcionará desde docker-compose
+CMD ["npm", "run", "dev"]
