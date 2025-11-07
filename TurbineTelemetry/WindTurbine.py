@@ -24,6 +24,8 @@ class WindTurbine:
         self.publish_interval = 10 # segundos
         self._stop_event = threading.Event()
         self._thread = None
+        
+        self.noise_probability = 0.05  # 3% de los mensajes seran ruidosos
 
     def get_telemetry_data(self) -> dict:
         capacity_mw: float = 2.5
@@ -89,8 +91,23 @@ class WindTurbine:
             # Info extra
             "capacity_mw": capacity_mw
         }
+            
+    # Introduce ruido en los datos de telemetría para simular fallos
+    def make_telemetry_noisy(self, raw_payload: dict) -> dict:
+        # partimos del payload sin ruido
+        fail_choices = [
+            None,
+            -9999,     # fuera rango negativo
+            999999.9   # fuera rango positivo
+        ]
+        # Forzamos que *todos* fallen (estricto)
+        raw_payload["wind_speed_mps"] = random.choice(fail_choices)
+        raw_payload["rotor_speed_rpm"] = random.choice(fail_choices)
+        raw_payload["bearing_temperature_c"] = random.choice(fail_choices)
         
-        
+        return raw_payload
+
+
 
     def start(self):
         """
@@ -119,6 +136,11 @@ class WindTurbine:
     def _send_telemetry(self):
         while not self._stop_event.is_set():
             data: dict = self.get_telemetry_data()
+
+            if random.random() < self.noise_probability:
+                data = self.make_telemetry_noisy(data)
+                print(f"\n**** [WARN] Enviando telemetría con ruido para turbina {data['turbine_id']}\n")
+            
             # el payload lo crea la entidad; el cliente solo publica en el topic que se le pasa
             # conversion data a JSON lo hace mqtt_client 
             self.mqtt_client.publish(self.telemetry_topic, data, qos=0, retain=False)

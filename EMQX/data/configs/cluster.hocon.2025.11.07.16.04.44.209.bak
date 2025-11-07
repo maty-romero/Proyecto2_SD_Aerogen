@@ -86,7 +86,7 @@ rule_engine {
           args {
             mqtt_properties {}
             payload = ""
-            qos = 1
+            qos = "1"
             retain = false
             topic = "farms/${farm_id}/turbines/${turbine_id}/clean_telemetry"
             user_properties = ""
@@ -95,29 +95,10 @@ rule_engine {
         }
       ]
       description = ""
-      enable = true
       metadata {created_at = 1762530126559}
       sql = """~
         SELECT
-          payload.farm_id                     AS farm_id,
-          payload.farm_name                    AS farm_name,
-          payload.turbine_id                   AS turbine_id,
-          payload.turbine_name                 AS turbine_name,
-          payload.timestamp                    AS timestamp,
-          payload.wind_speed_mps               AS wind_speed_mps,
-          payload.wind_direction_deg           AS wind_direction_deg,
-          payload.rotor_speed_rpm              AS rotor_speed_rpm,
-          payload.blade_pitch_angle_deg        AS blade_pitch_angle_deg,
-          payload.yaw_position_deg             AS yaw_position_deg,
-          payload.vibrations_mms               AS vibrations_mms,
-          payload.gear_temperature_c           AS gear_temperature_c,
-          payload.bearing_temperature_c        AS bearing_temperature_c,
-          payload.output_voltage_v             AS output_voltage_v,
-          payload.generated_current_a          AS generated_current_a,
-          payload.active_power_kw              AS active_power_kw,
-          payload.reactive_power_kvar          AS reactive_power_kvar,
-          payload.operational_state            AS operational_state,
-          payload.capacity_mw                  AS capacity_mw
+          payload
         FROM
           "farms/+/turbines/+/raw_telemetry"
         WHERE
