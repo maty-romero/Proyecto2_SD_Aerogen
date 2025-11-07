@@ -54,7 +54,8 @@
       outDir: 'build',
     },
     server: {
-      port: 3000,
-      open: true,
+      port: 8080, // Cambiado al puerto 8080
+      open: false, // Evita que intente abrir el navegador dentro de Docker
+      host: true,  // Permite que el servidor sea accesible desde fuera del contenedor
     },
   });

@@ -37,6 +37,7 @@ interface WindFarmData {
     activeTurbines: number;
     totalTurbines: number;
     averagePowerFactor?: number;
+    averageWindSpeed?: number;
     averageVoltage?: number;
   } | null;
   farmEnvironmental: FarmEnvironmentalData | null;
@@ -56,6 +57,7 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
   } = options;
 
   const [data, setData] = useState<WindFarmData>({
+    // Inicia vacío. Se poblará con el primer mensaje de stats.
     turbines: new Map(),
     alerts: [],
     farmStats: null,
@@ -79,38 +81,37 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
    * Maneja actualizaciones de datos de turbinas desde MQTT
    */
   const handleTurbineUpdate = useCallback((
-    turbineId: string, 
-    message: MqttTurbineMessage,
-    metadata?: { name: string; capacity: number }
-  ) => {
-    setData(prev => {
-      const turbines = new Map(prev.turbines);
-      
-      // Obtener turbina existente o crear una nueva
-      const existingTurbine = turbines.get(turbineId);
-      
-      const updatedTurbine: Turbine = {
-        id: turbineId,
-        name: metadata?.name || existingTurbine?.name || `Turbina ${turbineId}`,
-        status: message.status,
-        capacity: metadata?.capacity || existingTurbine?.capacity || 2.5,
-        environmental: message.environmental,
-        mechanical: message.mechanical,
-        electrical: message.electrical,
-        lastMaintenance: existingTurbine?.lastMaintenance || '',
-        nextMaintenance: existingTurbine?.nextMaintenance || '',
-        operatingHours: existingTurbine?.operatingHours || 0,
-      };
-      
-      turbines.set(turbineId, updatedTurbine);
-      
-      return {
-        ...prev,
-        turbines,
-        lastUpdate: new Date(),
-      };
-    });
-  }, []);
+  turbineId: string, 
+  message: MqttTurbineMessage,
+  metadata?: { name: string; capacity: number }
+) => {
+  setData(prev => {
+    const newTurbines = new Map(prev.turbines);
+    const existingTurbine = newTurbines.get(turbineId) || {};
+    
+    // Siempre crear/sobrescribir la turbina completa
+    const updatedTurbine: Turbine = {
+      ...existingTurbine,
+      id: turbineId,
+      name: metadata?.name || `Turbina ${turbineId}`,
+      capacity: metadata?.capacity || 2.5,
+      status: message.status,
+      environmental: message.environmental,
+      mechanical: message.mechanical,
+      electrical: message.electrical,
+      // Conservar datos que no vienen por MQTT si ya existen
+      operatingHours: existingTurbine.operatingHours || 0,
+    };
+    
+    newTurbines.set(turbineId, updatedTurbine);
+    
+    return {
+      ...prev,
+      turbines: newTurbines,
+      lastUpdate: new Date(),
+    };
+  });
+}, []);
 
   /**
    * Maneja nuevas alertas desde MQTT
@@ -138,19 +139,44 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
    * Maneja actualizaciones de estadísticas generales desde MQTT
    */
   const handleStatsUpdate = useCallback((message: MqttStatsMessage) => {
-    setData(prev => ({
-      ...prev,
-      farmStats: {
-        totalPower: message.totalPower,
-        activeTurbines: message.activeTurbines,
-        totalTurbines: message.totalTurbines,
-        averagePowerFactor: message.averagePowerFactor,
-        averageVoltage: message.averageVoltage,
-      },
-      farmEnvironmental: message.farmEnvironmental,
-      hourlyProduction: message.hourlyProduction || [],
-      lastUpdate: new Date(),
-    }));
+    setData(prev => {
+      let turbines = new Map(prev.turbines);
+
+      // Si es la primera vez que recibimos stats y el mapa está vacío, creamos la grilla.
+      if (turbines.size === 0 && message.totalTurbines > 0) {
+        for (let i = 1; i <= message.totalTurbines; i++) {
+          const turbineId = String(i);
+          if (!turbines.has(turbineId)) {
+            turbines.set(turbineId, {
+              id: turbineId,
+              name: `Turbina ${i}`,
+              capacity: 2.5, // Capacidad por defecto, se puede actualizar luego
+              status: 'standby',
+              environmental: { windSpeed: 0, windDirection: 0 },
+              mechanical: { rotorSpeed: 0, pitchAngle: 90, yawPosition: 0, vibration: 0, gearboxTemperature: 0, bearingTemperature: 0, oilPressure: 0, oilLevel: 0 },
+              electrical: { outputVoltage: 0, outputCurrent: 0, activePower: 0, reactivePower: 0, powerFactor: 0 },
+              lastMaintenance: 'N/A', nextMaintenance: 'N/A', operatingHours: 0,
+            });
+          }
+        }
+      }
+
+      return {
+        ...prev,
+        turbines, // Devolvemos el mapa, posiblemente inicializado
+        farmStats: {
+          totalPower: message.totalPower,
+          activeTurbines: message.activeTurbines,
+          totalTurbines: message.totalTurbines,
+          averagePowerFactor: message.averagePowerFactor,
+          averageWindSpeed: message.farmEnvironmental?.avgWindSpeed,
+          averageVoltage: message.averageVoltage,
+        },
+        farmEnvironmental: message.farmEnvironmental,
+        hourlyProduction: message.hourlyProduction || [],
+        lastUpdate: new Date(),
+      };
+    });
   }, []);
 
   /**
@@ -301,8 +327,8 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
 
   return {
     // Datos
-    turbines: Array.from(data.turbines.values()),
-    turbinesMap: data.turbines,
+    turbines: data.turbines,
+    turbinesList: Array.from(data.turbines.values()),
     alerts: data.alerts,
     farmStats: data.farmStats,
     farmEnvironmental: data.farmEnvironmental,

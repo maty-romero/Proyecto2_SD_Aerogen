@@ -24,14 +24,14 @@ class TelemetrySubscriber:
         # ---> Resto de la configuracion
     
     # telemetria todas las turbinas para ese farm_id
-    def get_topic_telem_raw(self, farm_id: int) -> str: 
-        return RAW_TURBINE_TELEMETRY_TOPIC.format(farm_id=farm_id)
+    def get_subscription_topic(self) -> str:
+        return RAW_TURBINE_TELEMETRY_TOPIC
     
     def run(self):
         self.mqtt_client.connect()
        
         self.mqtt_client.subscribe(
-            self.get_topic_telem_raw(self.farm_id), 
+            self.get_subscription_topic(),
             self._message_callback
         )
         # El bucle principal se maneja en main.py, aquí solo nos aseguramos de que el cliente MQTT siga corriendo.

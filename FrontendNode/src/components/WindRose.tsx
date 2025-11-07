@@ -34,7 +34,7 @@ export function WindRose({ direction, speed }: WindRoseProps) {
           <text x="20" y="105" textAnchor="middle" className="fill-slate-700 dark:fill-slate-300 text-sm">O</text>
           
           {/* Wind direction arrow - centroid at (100, 100) */}
-          <g transform={`rotate(${direction} 100 100)`}>
+          <g transform={`rotate(${direction} 100 100)`} className="transition-transform duration-500 ease-in-out">
             {/* Triangular arrow with geometric center at (100, 100) */}
             {/* Vertices: (100,60), (92,120), (108,120) -> centroid = (100, 100) */}
             <path

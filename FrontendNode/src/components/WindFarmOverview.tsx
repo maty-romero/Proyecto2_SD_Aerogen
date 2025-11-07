@@ -2,26 +2,28 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Wind, Zap, TrendingUp, AlertTriangle, Clock, Activity } from 'lucide-react';
 import { Progress } from './ui/progress';
-import { generateTurbineData } from '../utils/turbineData';
 
-// Generate turbine data for calculations
-const turbines = generateTurbineData();
+interface WindFarmOverviewProps {
+  farmStats: {
+    totalPower: number;
+    activeTurbines: number;
+    totalTurbines: number;
+    averagePowerFactor?: number;
+    averageWindSpeed?: number;
+    averageVoltage?: number;
+  } | null;
+}
 
-// Calculate aggregated data
-const totalTurbines = turbines.length;
-const activeTurbines = turbines.filter(t => t.status === 'operational').length;
-const totalPowerKW = turbines.reduce((sum, t) => sum + t.electrical.activePower, 0);
-const totalPowerMW = totalPowerKW / 1000;
-const totalCapacity = turbines.reduce((sum, t) => sum + t.capacity, 0);
-const avgWindSpeed = turbines.reduce((sum, t) => sum + t.environmental.windSpeed, 0) / totalTurbines;
-const alerts = turbines.filter(t => t.status === 'fault' || t.status === 'maintenance').length;
-const todayProduction = totalPowerMW * 24; // Simplified calculation
+export function WindFarmOverview({ farmStats }: WindFarmOverviewProps) {
+  const totalPowerMW = (farmStats?.totalPower || 0) / 1000;
+  const totalCapacity = (farmStats?.totalTurbines || 24) * 2.5;
+  const activeTurbines = farmStats?.activeTurbines || 0;
+  const totalTurbines = farmStats?.totalTurbines || 24;
+  const avgPowerFactor = farmStats?.averagePowerFactor || 0;
+  const avgWindSpeed = farmStats?.averageWindSpeed || 0;
+  const alerts = 0; // This should come from alerts data
 
-export function WindFarmOverview() {
   const utilizationRate = (totalPowerMW / totalCapacity) * 100;
-  const avgPowerFactor = turbines
-    .filter(t => t.status === 'operational')
-    .reduce((sum, t) => sum + t.electrical.powerFactor, 0) / (activeTurbines || 1);
 
   return (
     <div className="space-y-6">
@@ -110,7 +112,7 @@ export function WindFarmOverview() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm">
-              <Wind className="w-4 h-4" />
+              <Wind className="w-4 h-4" /> 
               <span>Velocidad Promedio del Viento</span>
             </div>
             <p className="text-2xl text-slate-900 dark:text-slate-100">{avgWindSpeed.toFixed(1)} m/s</p>
@@ -146,7 +148,7 @@ export function WindFarmOverview() {
               <Zap className="w-4 h-4" />
               <span>Potencia Activa Total</span>
             </div>
-            <p className="text-2xl text-slate-900 dark:text-slate-100">{totalPowerKW.toLocaleString()} kW</p>
+            <p className="text-2xl text-slate-900 dark:text-slate-100">{(farmStats?.totalPower || 0).toLocaleString()} kW</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm">{totalPowerMW.toFixed(2)} MW</p>
           </div>
           
@@ -155,7 +157,7 @@ export function WindFarmOverview() {
               <TrendingUp className="w-4 h-4" />
               <span>Producción Estimada Hoy</span>
             </div>
-            <p className="text-2xl text-slate-900 dark:text-slate-100">{todayProduction.toFixed(0)}</p>
+            <p className="text-2xl text-slate-900 dark:text-slate-100">--</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm">MWh generados</p>
           </div>
 

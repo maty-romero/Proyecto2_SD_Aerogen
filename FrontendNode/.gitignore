@@ -1,0 +1,28 @@
+# Archivos de dependencias
+# ---------------------------------
+/node_modules
+
+# Archivos de compilación (build)
+# ---------------------------------
+/dist
+/build
+
+# Archivos de logs
+# ---------------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Archivos de entorno
+# No subas tus claves secretas al repositorio
+# ---------------------------------
+.env
+.env.local
+.env.*.local
+
+# Archivos de configuración de editores e IDEs
+# ---------------------------------
+.vscode/
+.idea/
+*.suo

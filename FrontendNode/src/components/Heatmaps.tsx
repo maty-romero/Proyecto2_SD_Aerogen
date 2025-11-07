@@ -11,13 +11,14 @@ import {
 } from 'lucide-react';
 
 interface HeatmapsProps {
-  turbines: Turbine[];
+  turbinesList: Turbine[];
 }
 
 // Calcula el color del heatmap basado en un valor normalizado (0-1)
 const getHeatColor = (value: number, reverse: boolean = false): string => {
   const normalizedValue = reverse ? 1 - value : value;
   
+  if (isNaN(normalizedValue)) return 'bg-slate-200 dark:bg-slate-700';
   if (normalizedValue >= 0.8) return 'bg-green-500 dark:bg-green-600';
   if (normalizedValue >= 0.6) return 'bg-lime-500 dark:bg-lime-600';
   if (normalizedValue >= 0.4) return 'bg-yellow-500 dark:bg-yellow-600';
@@ -30,14 +31,16 @@ const getTextColor = (value: number): string => {
   return 'text-white dark:text-white';
 };
 
-export function Heatmaps({ turbines }: HeatmapsProps) {
+export function Heatmaps({ turbinesList }: HeatmapsProps) {
+  const turbines = turbinesList || [];
+
   // 1. Heatmap de Generación de Energía
-  const maxPower = Math.max(...turbines.map(t => t.electrical.activePower));
+  const maxPower = Math.max(0, ...turbines.map(t => t.electrical.activePower || 0));
   const powerData = turbines.map(t => ({
     id: t.id,
     name: t.name,
     value: t.electrical.activePower,
-    normalized: maxPower > 0 ? t.electrical.activePower / maxPower : 0,
+    normalized: maxPower > 0 ? t.electrical.activePower / maxPower : 0, // Evitar división por cero
     display: `${(t.electrical.activePower / 1000).toFixed(2)} MW`,
   }));
 
@@ -80,7 +83,7 @@ export function Heatmaps({ turbines }: HeatmapsProps) {
   });
 
   // 5. Heatmap de Velocidad de Viento
-  const maxWindSpeed = Math.max(...turbines.map(t => t.environmental.windSpeed));
+  const maxWindSpeed = Math.max(0, ...turbines.map(t => t.environmental.windSpeed || 0));
   const windSpeedData = turbines.map(t => {
     const normalized = maxWindSpeed > 0 ? t.environmental.windSpeed / maxWindSpeed : 0;
     return {

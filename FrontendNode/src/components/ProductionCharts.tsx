@@ -2,13 +2,6 @@ import { Card } from './ui/card';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // Mock data for charts
-const hourlyData = Array.from({ length: 24 }, (_, i) => ({
-  hour: `${String(i).padStart(2, '0')}:00`,
-  power: 20000 + Math.random() * 20000,
-  windSpeed: 8 + Math.random() * 8,
-  voltage: 685 + Math.random() * 10,
-}));
-
 const weeklyData = [
   { day: 'Lun', production: 1150, target: 1200, activePower: 48500 },
   { day: 'Mar', production: 1280, target: 1200, activePower: 53300 },
@@ -33,17 +26,18 @@ const monthlyData = [
 ];
 
 interface ProductionChartsProps {
+  hourlyProduction: { hour: string; power: number }[];
   compact?: boolean;
 }
 
-export function ProductionCharts({ compact = false }: ProductionChartsProps) {
+export function ProductionCharts({ hourlyProduction, compact = false }: ProductionChartsProps) {
   return (
     <div className="space-y-6">
       {/* Real-time Power Output */}
       <Card className="p-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-slate-900 dark:text-slate-100 mb-4">Potencia Activa en Tiempo Real (24h)</h3>
         <ResponsiveContainer width="100%" height={compact ? 250 : 350}>
-          <AreaChart data={hourlyData}>
+          <AreaChart data={hourlyProduction}>
             <defs>
               <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -119,7 +113,7 @@ export function ProductionCharts({ compact = false }: ProductionChartsProps) {
           <Card className="p-6 dark:bg-slate-900 dark:border-slate-800">
             <h3 className="text-slate-900 dark:text-slate-100 mb-4">Velocidad del Viento y Voltaje (24h)</h3>
             <ResponsiveContainer width="100%" height={350}>
-              <LineChart data={hourlyData}>
+              <LineChart data={hourlyProduction}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
                 <XAxis 
                   dataKey="hour" 

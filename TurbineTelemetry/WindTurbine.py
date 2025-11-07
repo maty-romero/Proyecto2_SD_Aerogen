@@ -14,14 +14,14 @@ class WindTurbine:
     def __init__(self, farm_id: int, turbine_id: int):
         self.turbine_id = turbine_id
         self.farm_id = farm_id
-        
-        self.telemetry_topic = f"farms/{farm_id}/turbines/{turbine_id}/raw_telemetry"
+
+        self.telemetry_topic = f"windfarm/turbines/{self.turbine_id}/clean_telemetry"
         self.status_topic = TOPIC_STATUS_TEMPLATE.format(farm_id=farm_id, turbine_id=turbine_id)
         
         # cliente mqtt con id unico
         str_turbine_id = f"T-00{self.turbine_id}" # T-001, T-002, etc 
         self.mqtt_client = GenericMQTTClient(client_id=str_turbine_id) 
-        self.publish_interval = 10 # segundos
+        self.publish_interval = 5 # segundos
         self._stop_event = threading.Event()
         self._thread = None
         

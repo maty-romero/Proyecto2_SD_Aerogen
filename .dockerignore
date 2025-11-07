@@ -1,0 +1,6 @@
+# Ignorar directorios de dependencias de Node.js
+FrontendNode/node_modules
+
+# Archivos de entorno local que no deben ir en la imagen
+# Ignoramos el .env general, pero no los específicos como .env.frontend
+/.env

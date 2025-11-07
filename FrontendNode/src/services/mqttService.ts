@@ -1,4 +1,5 @@
-import { 
+import mqtt, { MqttClient } from 'mqtt';
+import {
   MqttTurbineMessage, 
   MqttFlatMessage,
   MqttFlatAlert,
@@ -25,7 +26,7 @@ import {
  */
 
 export class MqttService {
-  private client: any = null;
+  private client: MqttClient | null = null;
   private connected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
@@ -37,7 +38,7 @@ export class MqttService {
   private onConnectionChangeCallback?: (connected: boolean) => void;
 
   constructor(
-    private brokerUrl: string = 'ws://localhost:8083/mqtt', // URL del broker EMQX
+    private brokerUrl: string = 'ws://localhost:8083/mqtt',
     private options: {
       clientId?: string;
       username?: string;
@@ -47,9 +48,9 @@ export class MqttService {
     } = {}
   ) {
     this.options = {
-      clientId: options.clientId || `windfarm_client_${Math.random().toString(16).substr(2, 8)}`,
-      username: options.username,
-      password: options.password,
+      clientId: `windfarm_client_${Math.random().toString(16).substr(2, 8)}`,
+      username: 'admin',
+      password: 'public',
       clean: options.clean !== false,
       reconnectPeriod: options.reconnectPeriod || 5000,
     };
@@ -60,25 +61,47 @@ export class MqttService {
    */
   async connect(): Promise<void> {
     try {
-      // En producción, aquí se usaría una librería MQTT como mqtt.js
-      // import mqtt from 'mqtt';
-      // this.client = mqtt.connect(this.brokerUrl, this.options);
-      
-      // Por ahora, simulamos la conexión
       console.log('Conectando a MQTT broker:', this.brokerUrl);
       
-      // Simulación de conexión exitosa
-      this.connected = true;
-      this.reconnectAttempts = 0;
-      
-      if (this.onConnectionChangeCallback) {
-        this.onConnectionChangeCallback(true);
-      }
-      
-      // Suscribirse a tópicos
-      this.subscribeToTopics();
-      
-      console.log('Conectado a MQTT broker exitosamente');
+      this.client = mqtt.connect(this.brokerUrl, this.options);
+
+      this.client.on('connect', () => {
+        this.connected = true;
+        this.reconnectAttempts = 0;
+        if (this.onConnectionChangeCallback) {
+          this.onConnectionChangeCallback(true);
+        }
+        this.subscribeToTopics();
+        console.log('Conectado a MQTT broker exitosamente');
+      });
+
+      this.client.on('message', (topic: string, payload: Buffer) => {
+        this.handleMessage(topic, payload);
+      });
+
+      this.client.on('error', (error: Error) => {
+        console.error('Error MQTT:', error);
+        // La reconexión es manejada por el evento 'close'
+      });
+
+      this.client.on('close', () => {
+        if (this.connected) {
+          this.connected = false;
+          if (this.onConnectionChangeCallback) {
+            this.onConnectionChangeCallback(false);
+          }
+          console.log('Desconectado del broker MQTT. Intentando reconectar...');
+          this.handleReconnect();
+        }
+      });
+
+      this.client.on('offline', () => {
+        console.log('Cliente MQTT está offline.');
+        if (this.connected) {
+          this.connected = false;
+          this.onConnectionChangeCallback?.(false);
+        }
+      });
     } catch (error) {
       console.error('Error conectando a MQTT:', error);
       this.handleReconnect();
@@ -92,7 +115,7 @@ export class MqttService {
     if (!this.connected) return;
 
     // Suscribirse a mediciones de todas las turbinas
-    this.subscribe('windfarm/turbines/+/measurements');
+    this.subscribe('windfarm/turbines/+/clean_telemetry');
     
     // Suscribirse a alertas
     this.subscribe('windfarm/alerts');
@@ -108,9 +131,14 @@ export class MqttService {
    */
   private subscribe(topic: string): void {
     try {
-      // En producción:
-      // this.client.subscribe(topic, { qos: 1 });
-      console.log('Suscrito al tópico:', topic);
+      if (!this.client) return;
+      this.client.subscribe(topic, { qos: 1 }, (err) => {
+        if (err) {
+          console.error('Error suscribiendo al tópico:', topic, err);
+        } else {
+          console.log('Suscrito al tópico:', topic);
+        }
+      });
     } catch (error) {
       console.error('Error suscribiendo al tópico:', topic, error);
     }
@@ -246,16 +274,19 @@ export class MqttService {
    */
   private handleMessage(topic: string, payload: Buffer): void {
     try {
+      // --- INICIO: Log para depuración ---
+      console.log(`[MQTT INCOMING] Topic: ${topic} | Payload: ${payload.toString()}`);
+      // --- FIN: Log para depuración ---
       const message = JSON.parse(payload.toString());
       
       // Procesar según el tópico
-      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/measurements')) {
+      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/clean_telemetry')) {
         // Mensaje plano del molino - transformar antes de procesar
         const flatMsg = message as MqttFlatMessage;
-        const structuredMessage = this.transformFlatMessage(flatMsg);
         const turbineId = String(flatMsg.turbine_id);
+        const structuredMessage = this.transformFlatMessage(flatMsg);
         const metadata = {
-          name: flatMsg.turbine_name,
+          name:  flatMsg.turbine_name,
           capacity: flatMsg.capacity_mw
         };
         this.handleTurbineMessage(turbineId, structuredMessage, metadata);
@@ -320,7 +351,7 @@ export class MqttService {
    */
   disconnect(): void {
     if (this.client) {
-      // this.client.end();
+      this.client.end();
       this.connected = false;
       if (this.onConnectionChangeCallback) {
         this.onConnectionChangeCallback(false);
@@ -361,15 +392,20 @@ export class MqttService {
    * Publica un mensaje en un tópico (para comandos/control)
    */
   publish(topic: string, message: any): void {
-    if (!this.connected) {
+    if (!this.connected || !this.client) {
       console.error('No conectado al broker MQTT');
       return;
     }
     
     try {
       const payload = JSON.stringify(message);
-      // this.client.publish(topic, payload, { qos: 1 });
-      console.log('Mensaje publicado en', topic, ':', message);
+      this.client.publish(topic, payload, { qos: 1 }, (err) => {
+        if (err) {
+          console.error('Error publicando mensaje:', err);
+        } else {
+          console.log('Mensaje publicado en', topic);
+        }
+      });
     } catch (error) {
       console.error('Error publicando mensaje:', error);
     }
