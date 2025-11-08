@@ -121,7 +121,7 @@ export class MqttService {
     this.subscribe('windfarm/alerts');
     
     // Suscribirse a estadísticas generales
-    this.subscribe('windfarm/stats');
+    this.subscribe('farms/1/stats');
     
     console.log('Suscrito a tópicos MQTT');
   }
