@@ -76,6 +76,7 @@ export class MqttService {
       });
 
       this.client.on('message', (topic: string, payload: Buffer) => {
+        console.log('----Mensaje recibido en topico:', topic, "\nPayload:", payload.toString(), "\n---");
         this.handleMessage(topic, payload);
       });
 
@@ -280,7 +281,7 @@ export class MqttService {
       const message = JSON.parse(payload.toString());
       
       // Procesar según el tópico
-      if (topic.startsWith('windfarm/turbines/') && topic.endsWith('/clean_telemetry')) {
+     if (topic.startsWith('farms/1/turbines/') && topic.endsWith('/clean_telemetry')) {
         // Mensaje plano del molino - transformar antes de procesar
         const flatMsg = message as MqttFlatMessage;
         const turbineId = String(flatMsg.turbine_id);
