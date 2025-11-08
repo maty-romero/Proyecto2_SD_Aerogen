@@ -51,10 +51,10 @@ services:
 
   statnode:
     build:
-      context: .
-      dockerfile: python.Dockerfile
+      context: ./StatNode # .
+      dockerfile: Dockerfile #python.Dockerfile
     container_name: windfarm_statnode
-    command: python -m StatNode.main # Usaremos un nuevo main.py
+    #command: python -m StatNode.main # Usaremos un nuevo main.py
     depends_on:
       - emqx
       - mongo
@@ -63,8 +63,15 @@ services:
       - MQTT_BROKER_HOST=emqx
       # La URI de mongo apunta al servicio 'mongo'
       - MONGO_URI=mongodb://mongo:27017
+      - FLASK_APP=API.server
+      - FLASK_ENV=development
+    ports:
+      - "5000:5000" # API Flask
     networks:
       - windfarm_net
+    env_file:
+      - ./StatNode/.env # fichero con las API keys
+      
 
   # frontend_debugger:
   #   build:

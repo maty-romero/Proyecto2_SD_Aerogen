@@ -1,4 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, g
+from StatNode.Auth.verify_key import *
+
 
 app = Flask(__name__)
 
@@ -6,20 +8,24 @@ app = Flask(__name__)
 def hello_geek():
     return '<h1>Hello from Flask & Docker</h2>'
 
-# Testing - EMQX RULE → Endpoint POST 
-@app.route('/farm/{id_farm}/turbines/telemetry ', methods=['POST'])
-def emqx_receiver():
-    # Obtener los datos JSON enviados por EMQX 
-    data = request.get_json(force=True)
-    
-    # Mostrar en consola para depurar
-    print("Mensaje recibido desde EMQX:")
-    print(data)
-
-    # Podés procesar los datos acá si querés (guardar en DB, etc.)
-    
-    # Responder con éxito
-    return jsonify({"status": "ok", "message": "Data received"}), 200
+# Endpoint Testing protegido con API Key para obtener alertas 
+"""
+Para probar en Postman:
+1. Crear una nueva request GET a http://localhost:5000/protected
+2. En la pestaña Headers, añadir un header:
+   Key: x-api-key
+   Value: RAW_API_KEY_GENERADA --> Ver Docs 
+"""
+@app.route("/protected", methods=['GET'])
+@require_api_key()
+def get_alerts():
+    # ejemplo: retornar alerts ficticias
+    return jsonify({"message": "You have accessed a protected endpoint!",
+        "alerts": [
+            {"id": 1, "message": "High wind speed detected", "turbine": "T-001"},
+            {"id": 2, "message": "Temperature threshold exceeded", "turbine": "T-002"}
+        ]
+    })
 
 
 if __name__ == '__main__':
