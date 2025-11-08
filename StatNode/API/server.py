@@ -12,9 +12,10 @@ def hello_geek():
 """
 Para probar en Postman:
 1. Crear una nueva request GET a http://localhost:5000/protected
-2. En la pestaña Headers, añadir un header:
+2. En la pestaña Headers, añadir un header -> Authorization > Auth Type API Key:
    Key: x-api-key
    Value: RAW_API_KEY_GENERADA --> Ver Docs 
+   Add to: Header
 """
 @app.route("/protected", methods=['GET'])
 @require_api_key()
