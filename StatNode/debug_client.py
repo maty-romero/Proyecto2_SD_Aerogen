@@ -2,7 +2,7 @@ import json
 import time
 from Shared.GenericMQTTClient import GenericMQTTClient
 
-RAW_TURBINE_TELEMETRY_TOPIC = "windfarm/turbines/+/measurements"
+RAW_TURBINE_TELEMETRY_TOPIC = "windfarm/turbines/+/raw_telemetry"
 
 class FrontendDebugSubscriber:
     def __init__(self, client_id: str):

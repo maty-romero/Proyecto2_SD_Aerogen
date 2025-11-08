@@ -162,7 +162,7 @@ export function MqttConnection({
                   <AlertDescription className="text-sm text-blue-800 dark:text-blue-300">
                     Tópicos esperados (JSON plano):
                     <ul className="list-disc list-inside mt-2 space-y-1 text-xs">
-                      <li>windfarm/turbines/+/measurements</li>
+                      <li>farms/1/turbines/+/clean_telemetry</li>
                       <li>windfarm/alerts</li>
                       <li>windfarm/stats</li>
                     </ul>

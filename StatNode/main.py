@@ -4,8 +4,8 @@ from threading import Lock, Thread
 
 from Shared.GenericMQTTClient import GenericMQTTClient
 
-RAW_TURBINE_TELEMETRY_TOPIC = "windfarm/turbines/+/clean_telemetry"
-STATS_TOPIC = "windfarm/stats"
+CLEAN_TELEMETRY_TOPIC = "farms/{farm_id}/turbines/+/raw_telemetry"
+STATS_TOPIC = "farms/{farm_id}/stats"
 
 class StatNode:
     def __init__(self, client_id: str = "stat_node_client"):
@@ -93,12 +93,13 @@ class StatNode:
         """Inicia el StatNode."""
         print("--- [StatNode] Iniciando nodo de estadísticas ---")
         self.mqtt_client.connect()
+        telemetry_topic = CLEAN_TELEMETRY_TOPIC.format(farm_id=1)   
         self.mqtt_client.subscribe(
-            RAW_TURBINE_TELEMETRY_TOPIC,
+            telemetry_topic,
             self._message_callback,
             qos=0
         )
-        print(f"--- [StatNode] Suscrito a: {RAW_TURBINE_TELEMETRY_TOPIC} ---")
+        print(f"--- [StatNode] Suscrito a: {CLEAN_TELEMETRY_TOPIC.format()} ---")
 
         # Iniciar el hilo para publicar estadísticas
         stats_thread = Thread(target=self._publish_stats, daemon=True)

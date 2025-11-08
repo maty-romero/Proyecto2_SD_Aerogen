@@ -115,7 +115,7 @@ export class MqttService {
     if (!this.connected) return;
 
     // Suscribirse a mediciones de todas las turbinas
-    this.subscribe('windfarm/turbines/+/clean_telemetry');
+    this.subscribe('farms/1/turbines/+/clean_telemetry');
     
     // Suscribirse a alertas
     this.subscribe('windfarm/alerts');
