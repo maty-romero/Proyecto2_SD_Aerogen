@@ -1,29 +1,27 @@
+version: "3.8"
+
 services:
   emqx:
-    image: emqx/emqx:5.7.2
+    # 1. Ajuste clave: 
+    build:
+      context: ./emqx_config
+      dockerfile: emqx.Dockerfile
+    image: emqx_windfarm_custom
     container_name: emqx_windfarm
     restart: unless-stopped
     ports:
-      - "1883:1883"     # MQTT (sin TLS)
-      - "8883:8883"     # MQTT (TLS)
-      - "8083:8083"     # MQTT sobre WebSocket (sin TLS)
-      - "8084:8084"     # MQTT sobre WebSocket (TLS)
-      - "18083:18083"   # Dashboard web
+      - "1883:1883"    # MQTT
+      - "8883:8883"    # MQTT (TLS)
+      - "8083:8083"    # MQTT sobre WebSocket
+      - "8084:8084"    # MQTT sobre WebSocket (TLS)
+      - "18083:18083"  # Dashboard web
     volumes:
-       - ./EMQX/data:/opt/emqx/data
+      # Mantenemos volúmenes para datos y logs, pero NO para la configuración 'etc'.
+      # La configuración ahora está dentro de la imagen 'emqx_windfarm_custom'.
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
     networks:
       - windfarm_net
-
-  # auth_node:
-  #     build: 
-  #       context: ./AuthNode   # carpeta base del proyecto Flask
-  #       dockerfile: Dockerfile
-  #     container_name: flask_api_auth
-  #     ports:
-  #       - "5000:5000" 
-  #     environment:
-  #       - FLASK_APP=server.py
-  #       - FLASK_ENV=development
 
   mongo:
     image: mongo:latest
@@ -44,24 +42,20 @@ services:
     depends_on:
       - emqx
     environment:
-      # El host del broker es el nombre del servicio 'emqx'
       - MQTT_BROKER_HOST=emqx
     networks:
       - windfarm_net
 
   statnode:
     build:
-      context: ./StatNode # .
-      dockerfile: Dockerfile #python.Dockerfile
+      context: ./StatNode
+      dockerfile: Dockerfile
     container_name: windfarm_statnode
-    #command: python -m StatNode.main # Usaremos un nuevo main.py
     depends_on:
       - emqx
       - mongo
     environment:
-      # El host del broker es el nombre del servicio 'emqx'
       - MQTT_BROKER_HOST=emqx
-      # La URI de mongo apunta al servicio 'mongo'
       - MONGO_URI=mongodb://mongo:27017
       - FLASK_APP=API.server
       - FLASK_ENV=development
@@ -70,20 +64,8 @@ services:
     networks:
       - windfarm_net
     env_file:
-      - ./StatNode/.env # fichero con las API keys
-      
+      - ./StatNode/.env
 
-  # frontend_debugger:
-  #   build:
-  #     context: ./FrontendNode # Apuntamos al directorio del frontend
-  #     dockerfile: Dockerfile # Asumimos/creamos un Dockerfile aquí
-  #   container_name: windfarm_frontend_debugger
-  #   # El comando ahora instala dependencias y corre el dev server
-  #   command: sh -c "npm install && npm run dev"
-  #   ports:
-  #     - "8080:8080" # Exponemos el puerto 8080 definido en vite.config.ts
-  #   networks:
-  #     - windfarm_net
   frontend_debugger:
     build:
       context: ./FrontendNode
@@ -94,10 +76,13 @@ services:
     networks:
       - windfarm_net
 
-
 networks:
   windfarm_net:
     driver: bridge
 
+# 3. Definición de todos los volúmenes nombrados
 volumes:
   mongo_data:
+  emqx_data: {}
+  emqx_log: {}
+  
