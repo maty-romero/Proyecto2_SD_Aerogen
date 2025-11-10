@@ -40,22 +40,23 @@ class TelemetrySubscriber:
         payload = msg.payload.decode()
         try:
             data: dict = json.loads(payload)
-            print(f"\nRecibido en '{msg.topic}': {data} \n******")
-        
-            self.db_service.insert_telemetry(data) # Insercion para historial
-            
+            print(f"\n[TelemetrySub] Recibido en '{msg.topic}': {data}")
         except json.JSONDecodeError:
-            data = payload
+            print(f"[TelemetrySub] Error: No se pudo decodificar el JSON del payload: {payload}")
+            return # Salir si el mensaje no es un JSON válido
+
+        try:
+            self.db_service.insert_telemetry(data) # Intentar inserción en BD
         except Exception as e:
-            print(f"Error genérico: {e}\n")
+            print(f"[TelemetrySub] Error al procesar o insertar en la base de datos: {e}\n")
 
     def stop(self):
         self.mqtt_client.disconnect()
     
-if __name__ == '__main__':
-    # Se asume 1 instancia por Farm
-    sub = TelemetrySubscriber(client_id="TestSub", farm_id=1)
-    sub.run()
-    # Mantener vivo para pruebas
-    while True: time.sleep(1)
+# if __name__ == '__main__':
+#     # Se asume 1 instancia por Farm
+#     sub = TelemetrySubscriber(client_id="TestSub", farm_id=1)
+#     sub.run()
+#     # Mantener vivo para pruebas
+#     while True: time.sleep(1)
     

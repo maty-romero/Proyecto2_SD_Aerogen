@@ -169,9 +169,15 @@ export interface MqttFlatStats {
   avg_power_factor: number;
   avg_voltage_v: number;
   
-  // Producción histórica (últimas 24 horas)
-  hourly_production_kwh: number[]; // Array de 24 valores
-  hourly_timestamps: string[]; // Array de 24 timestamps
+  // Producción histórica
+  hourly_production_kwh: number[];
+  hourly_timestamps: string[];
+  daily_production_kwh: number[];
+  daily_timestamps: string[];
+  monthly_production_kwh: number[];
+  monthly_timestamps: string[];
+  hourly_avg_wind_speed: number[];
+  hourly_avg_voltage: number[];
 }
 
 // Formato estructurado de alerta (usado internamente)
@@ -190,9 +196,15 @@ export interface MqttStatsMessage {
   totalTurbines: number;
   farmEnvironmental: FarmEnvironmentalData;
   timestamp: string;
-  hourlyProduction?: { hour: string; power: number }[];
   averagePowerFactor?: number;
   averageVoltage?: number;
+  
+  // Datos para gráficos
+  hourlyProduction: { hour: string; power: number }[];
+  weeklyProduction: { day: string; production: number }[];
+  monthlyProduction: { month: string; production: number }[];
+  hourlyWindSpeed: { hour: string; windSpeed: number }[];
+  hourlyVoltage: { hour: string; voltage: number }[];
 }
 
 // API Response types

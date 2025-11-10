@@ -11,7 +11,7 @@ class GenericMongoClient:
     Permite operaciones básicas de inserción, consulta y actualización.
     """
     #def __init__(self, uri: str = "mongodb://localhost:27017", db_name: str = "test_db"):
-    def __init__(self, uri: str = os.environ.get("MONGO_URI", "mongodb://localhost:27017"), db_name: str = "test_db"):
+    def __init__(self, uri: str = os.environ.get("MONGO_URI", "mongodb://localhost:27017"), db_name: str = os.environ.get("MONGO_DB_NAME", "test_db")):
         self.uri = uri
         self.db_name = db_name
         self.client: MongoClient = None

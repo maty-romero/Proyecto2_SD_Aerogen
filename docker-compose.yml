@@ -50,6 +50,8 @@ services:
       - MQTT_BROKER_HOST=emqx
       # La URI de mongo apunta al servicio 'mongo'
       - MONGO_URI=mongodb://mongo:27017
+      # Especificamos el nombre de la base de datos
+      - MONGO_DB_NAME=windfarm_db
     networks:
       - windfarm_net
 

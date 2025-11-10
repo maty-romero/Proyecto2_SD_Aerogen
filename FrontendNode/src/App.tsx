@@ -21,6 +21,10 @@ function AppContent() {
     alerts,
     farmStats,
     hourlyProduction,
+    weeklyProduction,
+    monthlyProduction,
+    hourlyWindSpeed,
+    hourlyVoltage,
     isConnected,
     loading,
     error,
@@ -84,7 +88,14 @@ function AppContent() {
             <WindFarmOverview farmStats={farmStats} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <ProductionCharts hourlyProduction={hourlyProduction} compact />
+                <ProductionCharts 
+                  hourlyProduction={hourlyProduction}
+                  weeklyProduction={weeklyProduction}
+                  monthlyProduction={monthlyProduction}
+                  hourlyWindSpeed={hourlyWindSpeed}
+                  hourlyVoltage={hourlyVoltage}
+                  compact 
+                />
               </div>
               <div>
                 <AlertsPanel alerts={alerts} compact />
@@ -101,7 +112,13 @@ function AppContent() {
           </TabsContent>
 
           <TabsContent value="production" className="space-y-6">
-            <ProductionCharts hourlyProduction={hourlyProduction} />
+            <ProductionCharts 
+              hourlyProduction={hourlyProduction}
+              weeklyProduction={weeklyProduction}
+              monthlyProduction={monthlyProduction}
+              hourlyWindSpeed={hourlyWindSpeed}
+              hourlyVoltage={hourlyVoltage}
+            />
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">
