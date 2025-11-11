@@ -197,6 +197,30 @@ export class MqttService {
       hour: flatStats.hourly_timestamps[index] || `${index}:00`,
       power: power
     }));
+
+    // Transformar producción semanal
+    const weeklyProduction = flatStats.daily_production_kwh.map((prod, index) => ({
+      day: flatStats.daily_timestamps[index] || `Día ${index + 1}`,
+      production: prod
+    }));
+
+    // Transformar producción mensual
+    const monthlyProduction = flatStats.monthly_production_kwh.map((prod, index) => ({
+      month: flatStats.monthly_timestamps[index] || `Mes ${index + 1}`,
+      production: prod
+    }));
+
+    // Transformar velocidad de viento horaria
+    const hourlyWindSpeed = flatStats.hourly_avg_wind_speed.map((speed, index) => ({
+      hour: flatStats.hourly_timestamps[index] || `${index}:00`,
+      windSpeed: speed
+    }));
+
+    // Transformar voltaje horario
+    const hourlyVoltage = flatStats.hourly_avg_voltage.map((voltage, index) => ({
+      hour: flatStats.hourly_timestamps[index] || `${index}:00`,
+      voltage: voltage
+    }));
     
     return {
       totalPower: flatStats.total_active_power_kw,
@@ -210,9 +234,15 @@ export class MqttService {
         lastUpdate: flatStats.timestamp
       },
       timestamp: flatStats.timestamp,
-      hourlyProduction: hourlyProduction,
       averagePowerFactor: flatStats.avg_power_factor,
-      averageVoltage: flatStats.avg_voltage_v
+      averageVoltage: flatStats.avg_voltage_v,
+      
+      // Datos para gráficos
+      hourlyProduction: hourlyProduction,
+      weeklyProduction: weeklyProduction,
+      monthlyProduction: monthlyProduction,
+      hourlyWindSpeed: hourlyWindSpeed,
+      hourlyVoltage: hourlyVoltage
     };
   }
 
@@ -298,6 +328,7 @@ export class MqttService {
         this.handleAlertMessage(structuredAlert);
       } else if (topic === 'windfarm/stats') {
         // Mensaje plano de estadísticas - transformar antes de procesar
+        console.log('[STATS RECEIVED]', message);
         const flatStats = message as MqttFlatStats;
         const structuredStats = this.transformFlatStats(flatStats);
         this.handleStatsMessage(structuredStats);

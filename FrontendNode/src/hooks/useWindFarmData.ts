@@ -42,6 +42,10 @@ interface WindFarmData {
   } | null;
   farmEnvironmental: FarmEnvironmentalData | null;
   hourlyProduction: { hour: string; power: number }[];
+  weeklyProduction: { day: string; production: number }[];
+  monthlyProduction: { month: string; production: number }[];
+  hourlyWindSpeed: { hour: string; windSpeed: number }[];
+  hourlyVoltage: { hour: string; voltage: number }[];
   isConnected: boolean;
   lastUpdate: Date | null;
 }
@@ -63,6 +67,10 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
     farmStats: null,
     farmEnvironmental: null,
     hourlyProduction: [],
+    weeklyProduction: [],
+    monthlyProduction: [],
+    hourlyWindSpeed: [],
+    hourlyVoltage: [],
     isConnected: false,
     lastUpdate: null,
   });
@@ -163,7 +171,7 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
 
       return {
         ...prev,
-        turbines, // Devolvemos el mapa, posiblemente inicializado
+        turbines,
         farmStats: {
           totalPower: message.totalPower,
           activeTurbines: message.activeTurbines,
@@ -174,6 +182,10 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
         },
         farmEnvironmental: message.farmEnvironmental,
         hourlyProduction: message.hourlyProduction || [],
+        weeklyProduction: message.weeklyProduction || [],
+        monthlyProduction: message.monthlyProduction || [],
+        hourlyWindSpeed: message.hourlyWindSpeed || [],
+        hourlyVoltage: message.hourlyVoltage || [],
         lastUpdate: new Date(),
       };
     });
@@ -333,6 +345,10 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
     farmStats: data.farmStats,
     farmEnvironmental: data.farmEnvironmental,
     hourlyProduction: data.hourlyProduction,
+    weeklyProduction: data.weeklyProduction,
+    monthlyProduction: data.monthlyProduction,
+    hourlyWindSpeed: data.hourlyWindSpeed,
+    hourlyVoltage: data.hourlyVoltage,
     
     // Estado
     isConnected: data.isConnected,
