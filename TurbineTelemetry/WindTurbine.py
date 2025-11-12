@@ -17,7 +17,8 @@ class WindTurbine:
         self.status_topic = TOPIC_STATUS.format(farm_id=farm_id, turbine_id=turbine_id)
         
         # cliente mqtt con id unico
-        str_turbine_id = f"T-00{self.turbine_id}" # T-001, T-002, etc 
+        str_turbine_id = f"WF-{farm_id}-T-{turbine_id}" 
+        
         self.mqtt_client = GenericMQTTClient(client_id=str_turbine_id) 
         self.publish_interval = 10 # segundos
         self._stop_event = threading.Event()

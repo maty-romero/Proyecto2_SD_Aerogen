@@ -2,13 +2,19 @@
 
 FROM python:3.8-slim-buster
 
-WORKDIR /flask_backend
+WORKDIR /AuthNode
 
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
+COPY AuthNode/requirements.txt ./requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copia codigo fuente
+COPY AuthNode/ ./         
+COPY Shared/ /Shared/
 
-EXPOSE 5000
+ENV PYTHONPATH="/:/AuthNode:${PYTHONPATH}"
+ENV FLASK_APP=server
+ENV FLASK_ENV=development
 
-CMD [ "python", "-m" , "flask", "run", "--host=0.0.0.0"]
+EXPOSE 5001
+
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5001"]
