@@ -8,6 +8,7 @@ from StatNode.DB.TelemetryDB import TelemetryDB
 
 CLEAN_TELEMETRY_TOPIC = "farms/{farm_id}/turbines/+/clean_telemetry".format(farm_id=1)
 STATS_TOPIC = "farms/{farm_id}/stats".format(farm_id=1)
+ALERTS_TOPIC = "farms/{farm_id}/alerts".format(farm_id=1)
 
 class StatNode:
     # El StatNode ahora es agnóstico al farm_id, pero lo usará para las consultas. Asumimos farm_id=1 por defecto.
@@ -30,11 +31,26 @@ class StatNode:
             self.db_service.insert_telemetry(payload)
 
             turbine_id = payload.get("turbine_id")
+            operational_state = payload.get("operational_state")
+
             if turbine_id is not None:
                 with self.data_lock:
+                    previous_state = self.turbines_data.get(turbine_id, {}).get("operational_state")
                     # Guardamos los datos más recientes en memoria para tener un conteo rápido de turbinas
                     self.turbines_data[turbine_id] = payload
-                # print(f"[StatNode] Datos actualizados para turbina {turbine_id}")
+
+                # --- Sistema de Alertas ---
+                # Si el estado actual es 'fault' y el anterior no lo era, se envía una alerta.
+                if operational_state == "fault" and previous_state != "fault":
+                    alert_payload = {
+                        "turbine_id": turbine_id,
+                        "farm_id": payload.get("farm_id"),
+                        "timestamp": payload.get("timestamp"),
+                        "message": f"Alerta: Turbina {turbine_id} ha entrado en estado de 'fault'."
+                    }
+                    print(f"[StatNode] ALERTA: Publicando fallo para turbina {turbine_id}")
+                    self.mqtt_client.publish(ALERTS_TOPIC, alert_payload, qos=2) # Usamos QoS 2 para asegurar la entrega
+
         except (json.JSONDecodeError, KeyError) as e:
             print(f"[StatNode] Error procesando mensaje: {e}")
 
