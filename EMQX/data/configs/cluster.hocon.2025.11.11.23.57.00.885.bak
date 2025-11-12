@@ -74,10 +74,9 @@ rule_engine {
           payload.turbine_id AS turbine_id,
           payload.farm_name AS farm_name,
           payload.turbine_name AS turbine_name,
-          'mechanical' AS alert_type,
-          'critical' AS severity,
-          'Gear temperature in critical levels' AS message,
-          payload.timestamp AS timestamp
+          payload.gear_temperature_c AS gear_temperature_c,
+          payload.timestamp AS timestamp,
+          'Gear temperature in critical levels' as message
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE payload.gear_temperature_c > 100~"""
     }
@@ -98,7 +97,6 @@ rule_engine {
       description = ""
       enable = true
       metadata {created_at = 1762530126559}
-      name = ""
       sql = """~
         SELECT
           payload.farm_id                     AS farm_id,

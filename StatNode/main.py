@@ -126,6 +126,7 @@ class StatNode:
             print(f"[StatNode] Publishing stats: {stats_payload}")
             self.mqtt_client.publish(STATS_TOPIC, stats_payload, qos=1)
             print(f"[StatNode] Estadísticas publicadas: {turbine_counts.get('operational', 0)}/{total_turbines} activas.")
+    
     def run(self):
         """Inicia el StatNode."""
         print("--- [StatNode] Iniciando nodo de estadísticas ---")

@@ -119,9 +119,10 @@ export class MqttService {
     this.subscribe('farms/1/turbines/+/clean_telemetry');
     
     // Suscribirse a alertas
-    this.subscribe('windfarm/alerts');
+    this.subscribe('farms/1/alerts/turbines/+'); // por ahora para testing 
     
     // Suscribirse a estadísticas generales
+    // farms/${farm_id}/alerts/turbines/${turbine_id} 
     this.subscribe('farms/1/stats');
     
     console.log('Suscrito a tópicos MQTT');
@@ -321,12 +322,12 @@ export class MqttService {
           capacity: flatMsg.capacity_mw
         };
         this.handleTurbineMessage(turbineId, structuredMessage, metadata);
-      } else if (topic === 'windfarm/alerts') {
+      } else if (topic.startsWith('farms/1/alerts/turbines/')) {
         // Mensaje plano de alerta - transformar antes de procesar
         const flatAlert = message as MqttFlatAlert;
         const structuredAlert = this.transformFlatAlert(flatAlert);
         this.handleAlertMessage(structuredAlert);
-      } else if (topic === 'windfarm/stats') {
+      } else if (topic === 'farms/1/stats') {
         // Mensaje plano de estadísticas - transformar antes de procesar
         console.log('[STATS RECEIVED]', message);
         const flatStats = message as MqttFlatStats;
