@@ -3,7 +3,7 @@ set -e
 
 mongoimport \
   --db windfarm_db \
-  --collection turbines \
+  --collection telemetry \
   --file /dataset.json \
   --mode insert
 
