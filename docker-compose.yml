@@ -53,21 +53,6 @@ services:
       - mongo_data_auth:/data/db
     networks:
       - windfarm_net
-    
-
-  simulator:
-    build:
-      context: .
-      dockerfile: python.Dockerfile
-    container_name: windfarm_simulator
-    command: python -m TurbineTelemetry.main
-    depends_on:
-      - emqx
-    environment:
-      # El host del broker es el nombre del servicio 'emqx'
-      - MQTT_BROKER_HOST=emqx
-    networks:
-      - windfarm_net
       
   statnode:
     build:
@@ -86,7 +71,21 @@ services:
       - "5000:5000"
     networks:
       - windfarm_net
-  
+
+  simulator:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    container_name: windfarm_simulator
+    command: python -m TurbineTelemetry.main
+    depends_on:
+      - emqx
+    environment:
+      # El host del broker es el nombre del servicio 'emqx'
+      - MQTT_BROKER_HOST=emqx
+    networks:
+      - windfarm_net
+
   frontend_debugger:
     build:
       context: ./FrontendNode
@@ -96,7 +95,6 @@ services:
       - "8080:8080"
     networks:
       - windfarm_net
-
 
 networks:
   windfarm_net:
