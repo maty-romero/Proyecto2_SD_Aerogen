@@ -76,7 +76,6 @@ export class MqttService {
       });
 
       this.client.on('message', (topic: string, payload: Buffer) => {
-        console.log('----Mensaje recibido en topico:', topic, "\nPayload:", payload.toString(), "\n---");
         this.handleMessage(topic, payload);
       });
 
@@ -196,45 +195,48 @@ export class MqttService {
    * Transforma el JSON plano de estadísticas al formato estructurado interno
    */
   private transformFlatStats(flatStats: MqttFlatStats): MqttStatsMessage {
-    // Transformar producción horaria
-    const hourlyProduction = flatStats.hourly_production_kwh.map((power, index) => ({
-      hour: flatStats.hourly_timestamps[index] || `${index}:00`,
-      power: power
+    // El backend ahora envía los datos de los gráficos en un formato unificado: [{timestamp, value}]
+    // Simplemente mapeamos este formato al que espera la UI.
+    const hourlyProduction = (flatStats.hourly_production_chart || []).map(item => ({
+      hour: item.timestamp,
+      power: item.value
     }));
 
     // Transformar producción semanal
-    const weeklyProduction = flatStats.daily_production_kwh.map((prod, index) => ({
-      day: flatStats.daily_timestamps[index] || `Día ${index + 1}`,
-      production: prod
+    const weeklyProduction = (flatStats.daily_production_chart || []).map(item => ({
+      day: item.timestamp,
+      production: item.value
     }));
 
     // Transformar producción mensual
-    const monthlyProduction = flatStats.monthly_production_kwh.map((prod, index) => ({
-      month: flatStats.monthly_timestamps[index] || `Mes ${index + 1}`,
-      production: prod
+    const monthlyProduction = (flatStats.monthly_production_chart || []).map(item => ({
+      month: item.timestamp,
+      production: item.value
     }));
 
     // Transformar velocidad de viento horaria
-    const hourlyWindSpeed = flatStats.hourly_avg_wind_speed.map((speed, index) => ({
-      hour: flatStats.hourly_timestamps[index] || `${index}:00`,
-      windSpeed: speed
+    const hourlyWindSpeed = (flatStats.hourly_wind_speed_chart || []).map(item => ({
+      hour: item.timestamp,
+      windSpeed: item.value
     }));
 
     // Transformar voltaje horario
-    const hourlyVoltage = flatStats.hourly_avg_voltage.map((voltage, index) => ({
-      hour: flatStats.hourly_timestamps[index] || `${index}:00`,
-      voltage: voltage
+    const hourlyVoltage = (flatStats.hourly_voltage_chart || []).map(item => ({
+      hour: item.timestamp,
+      voltage: item.value
     }));
     
     return {
-      totalPower: flatStats.total_active_power_kw,
+      // Usamos las nuevas claves del backend
+      totalPower: flatStats.avg_active_power_kw, // Potencia promedio del parque
       activeTurbines: flatStats.operational_turbines,
       totalTurbines: flatStats.total_turbines,
       farmEnvironmental: {
         avgWindSpeed: flatStats.avg_wind_speed_mps,
         maxWindSpeed: flatStats.max_wind_speed_mps,
         minWindSpeed: flatStats.min_wind_speed_mps,
-        predominantWindDirection: flatStats.predominant_wind_direction_deg,
+        // predominantWindDirection no se está calculando aún
+        predominantWindDirection: 0, // Valor por defecto
         lastUpdate: flatStats.timestamp
       },
       timestamp: flatStats.timestamp,
@@ -246,7 +248,11 @@ export class MqttService {
       weeklyProduction: weeklyProduction,
       monthlyProduction: monthlyProduction,
       hourlyWindSpeed: hourlyWindSpeed,
-      hourlyVoltage: hourlyVoltage
+      hourlyVoltage: hourlyVoltage,
+
+      // Nuevas métricas de rendimiento
+      timeBasedAvailability: flatStats.time_based_availability_pct,
+      farmCpWeighted: flatStats.farm_cp_weighted,
     };
   }
 
@@ -309,14 +315,10 @@ export class MqttService {
    */
   private handleMessage(topic: string, payload: Buffer): void {
     try {
-      // --- INICIO: Log para depuración ---
-      console.log(`[MQTT INCOMING] Topic: ${topic} | Payload: ${payload.toString()}`);
-      // --- FIN: Log para depuración ---
       const message = JSON.parse(payload.toString());
       
       // Procesar según el tópico
      if (topic.startsWith('farms/1/turbines/') && topic.endsWith('/clean_telemetry')) {
-        // Mensaje plano del molino - transformar antes de procesar
         const flatMsg = message as MqttFlatMessage;
         const turbineId = String(flatMsg.turbine_id);
         const structuredMessage = this.transformFlatMessage(flatMsg);
@@ -326,13 +328,11 @@ export class MqttService {
         };
         this.handleTurbineMessage(turbineId, structuredMessage, metadata);
       } else if (topic === 'farms/1/alerts') {
-        // Mensaje de alerta unificado
         const flatAlert = message as MqttFlatAlert;
         const structuredAlert = this.transformFlatAlert(flatAlert);
         console.log('[MQTT INCOMING] Structured Alert:', structuredAlert); // Para depuración
         this.handleAlertMessage(structuredAlert);
       } else if (topic === 'farms/1/stats') {
-        // Mensaje plano de estadísticas - transformar antes de procesar
         console.log('[STATS RECEIVED]', message);
         const flatStats = message as MqttFlatStats;
         const structuredStats = this.transformFlatStats(flatStats);

@@ -43,10 +43,14 @@ class TelemetryDB:
         if payload.get("active_power_kw") is None:
             V = payload.get("output_voltage_v")
             I = payload.get("generated_current_a")
+            # La potencia activa en un sistema trifásico es P = V_LL * I * sqrt(3) * PF.
+            # WindTurbine.py no envía el PF, pero podemos asumir un valor típico (ej. 0.95)
+            # o simplemente no calcularlo si no viene el valor explícito.
+            # Aquí lo calculamos asumiendo un PF de 1 para el peor caso.
             if V is not None and I is not None:
                 try:
-                    payload["active_power_kw"] = float(V) * float(I) / 1000.0
-                except Exception:
+                    payload["active_power_kw"] = (float(V) * float(I) * (3**0.5)) / 1000.0
+                except (TypeError, ValueError):
                     payload["active_power_kw"] = None
 
         return payload
@@ -149,29 +153,83 @@ class TelemetryDB:
     def get_metrics_per_turbine(self, farm_id: int, minutes: int = 5,
                                  rotor_radius_m: Optional[float] = None) -> Dict[int, dict]:
         """
-        Métricas por turbina:
+        Métricas por turbina optimizadas con una única consulta de agregación.
         - avg_wind_speed_mps
         - avg_active_power_kw
         - energy_kwh
-        - capacity_factor_pct (si capacity_mw existe)
-        - availability_pct (samples operational / total samples) * 100
-        - avg_power_coefficient_cp (Cp calculado con avg_power & avg_wind)
+        - capacity_factor_pct
+        - availability_pct
+        - avg_power_coefficient_cp
         """
         since = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        window_hours = minutes / 60.0
 
-        # Pipeline: match por farm y ventana; ordenar por timestamp para usar $last; agrupar por turbine
+        # El pipeline calcula todas las métricas directamente en la base de datos.
         pipeline = [
             {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}}},
-            {"$sort": {"timestamp": 1}},  # necesario para $last funcione como "último" en la ventana
             {"$group": {
                 "_id": "$turbine_id",
                 "avg_wind": {"$avg": "$wind_speed_mps"},
                 "avg_power_kw": {"$avg": "$active_power_kw"},
-                "sum_power_kw": {"$sum": "$active_power_kw"},
                 "sample_count": {"$sum": 1},
                 "active_samples": {"$sum": {"$cond": [{"$eq": ["$operational_state", "operational"]}, 1, 0]}},
-                "last_state": {"$last": "$operational_state"},
-                "avg_capacity_mw": {"$avg": "$capacity_mw"}  # si existe
+                "avg_capacity_mw": {"$avg": "$capacity_mw"}
+            }},
+            {"$addFields": {
+                "energy_kwh": {
+                    "$ifNull": [{"$multiply": ["$avg_power_kw", window_hours]}, 0]
+                },
+                "availability_pct": {
+                    "$cond": {
+                        "if": {"$gt": ["$sample_count", 0]},
+                        "then": {"$multiply": [{"$divide": ["$active_samples", "$sample_count"]}, 100]},
+                        "else": 0
+                    }
+                },
+                "avg_power_coefficient_cp": {
+                    "$cond": {
+                        "if": {
+                            "$and": [
+                                {"$gt": ["$avg_power_kw", 0]},
+                                {"$gt": ["$avg_wind", 0]},
+                                {"$ne": [rotor_radius_m, None]}
+                            ]
+                        },
+                        "then": {
+                            "$divide": [
+                                {"$multiply": ["$avg_power_kw", 1000]},
+                                {
+                                    "$multiply": [
+                                        0.5, DEFAULT_AIR_DENSITY, pi,
+                                        {"$pow": [rotor_radius_m, 2]},
+                                        {"$pow": ["$avg_wind", 3]}
+                                    ]
+                                }
+                            ]
+                        },
+                        "else": None
+                    }
+                }
+            }},
+            {"$addFields": {
+                "capacity_factor_pct": {
+                    "$cond": {
+                        "if": {"$and": [
+                            {"$gt": ["$avg_capacity_mw", 0]},
+                            {"$gt": [window_hours, 0]}
+                        ]},
+                        "then": {
+                            "$multiply": [
+                                {"$divide": [
+                                    "$energy_kwh",
+                                    {"$multiply": ["$avg_capacity_mw", 1000, window_hours]}
+                                ]},
+                                100
+                            ]
+                        },
+                        "else": None
+                    }
+                }
             }},
             {"$sort": {"_id": 1}}
         ]
@@ -182,43 +240,17 @@ class TelemetryDB:
         except PyMongoError:
             raise
 
+        # El post-procesamiento es mínimo, solo para formatear la salida.
         out: Dict[int, dict] = {}
         for doc in cursor:
             tid = doc["_id"]
-            avg_wind = doc.get("avg_wind")
-            avg_power = doc.get("avg_power_kw")
-            sum_power = doc.get("sum_power_kw") or 0.0
-            sample_count = int(doc.get("sample_count", 0))
-            active_samples = int(doc.get("active_samples", 0))
-            avg_capacity_mw = doc.get("avg_capacity_mw")  # puede ser None
-
-            # energy_kwh: usar helper (usa sum_power en kW y sample_count para estimar intervalo)
-            energy_kwh = self._compute_energy_kwh(sum_power_kw=sum_power, count=sample_count, window_minutes=minutes)
-
-            # capacity factor: energy / (capacity_kw * window_hours) * 100
-            if avg_capacity_mw:
-                capacity_kw = float(avg_capacity_mw) * 1000.0
-                window_hours = minutes / 60.0
-                denom = capacity_kw * window_hours
-                capacity_factor_pct = None
-                if denom > 0:
-                    capacity_factor_pct = round((energy_kwh / denom) * 100.0, 3)
-            else:
-                capacity_factor_pct = None
-
-            availability_pct = None
-            if sample_count > 0:
-                availability_pct = round((active_samples / sample_count) * 100.0, 2)
-
-            cp_avg = self._compute_cp(p_avg_kw=avg_power, v_avg=avg_wind, rotor_radius_m=rotor_radius_m)
-
             out[tid] = {
-                "avg_wind_speed_mps": None if avg_wind is None else round(avg_wind, 3),
-                "avg_active_power_kw": None if avg_power is None else round(avg_power, 3),
-                "energy_kwh": round(energy_kwh, 4),
-                "capacity_factor_pct": capacity_factor_pct,
-                "availability_pct": availability_pct,
-                "avg_power_coefficient_cp": None if cp_avg is None else round(cp_avg, 4),
+                "avg_wind_speed_mps": round(doc["avg_wind"], 3) if doc.get("avg_wind") is not None else None,
+                "avg_active_power_kw": round(doc["avg_power_kw"], 3) if doc.get("avg_power_kw") is not None else None,
+                "energy_kwh": round(doc.get("energy_kwh", 0), 4),
+                "capacity_factor_pct": round(doc["capacity_factor_pct"], 3) if doc.get("capacity_factor_pct") is not None else None,
+                "availability_pct": round(doc.get("availability_pct", 0), 2),
+                "avg_power_coefficient_cp": round(doc["avg_power_coefficient_cp"], 4) if doc.get("avg_power_coefficient_cp") is not None else None,
             }
 
         return out
@@ -248,12 +280,33 @@ class TelemetryDB:
                 "avg_power_kw": {"$avg": "$active_power_kw"},
                 "sum_power_kw": {"$sum": "$active_power_kw"},
                 "avg_voltage": {"$avg": "$output_voltage_v"},
+                "sum_reactive_power_kvar": {"$sum": "$reactive_power_kvar"},
                 "max_wind": {"$max": "$wind_speed_mps"},
                 "min_wind": {"$min": "$wind_speed_mps"},
                 "sample_count": {"$sum": 1},
                 "active_samples": {"$sum": {"$cond": [{"$eq": ["$operational_state", "operational"]}, 1, 0]}},
                 "last_state": {"$last": "$operational_state"},
                 "avg_capacity_mw": {"$avg": "$capacity_mw"}
+            }},
+            # Pre-cálculo de métricas por turbina antes de la agregación final
+            {"$addFields": {
+                "energy_kwh": {"$multiply": ["$avg_power_kw", minutes / 60.0]},
+                "cp_estimate": {
+                    "$let": {
+                        "vars": {
+                            "p_w": {"$multiply": ["$avg_power_kw", 1000]},
+                            "denom": {
+                                "$multiply": [0.5, DEFAULT_AIR_DENSITY, pi, {"$pow": [rotor_radius_m, 2]}, {"$pow": ["$avg_wind", 3]}]
+                            }
+                        },
+                        "in": {
+                            "$cond": {
+                                "if": {"$gt": ["$$denom", 0]},
+                                "then": {"$divide": ["$$p_w", "$$denom"]},
+                                "else": None
+                            }
+                        }
+                    }}
             }},
             # Segundo group: sumar/contar a nivel farm
             # Aquí calculamos los promedios y totales para todo el parque.
@@ -268,11 +321,15 @@ class TelemetryDB:
                 "avg_voltage_farm": {"$avg": "$avg_voltage"},
                 "max_wind_farm": {"$max": "$max_wind"},
                 "min_wind_farm": {"$min": "$min_wind"},
-                "sum_reactive_power_kvar_farm": {"$sum": {"$ifNull": ["$reactive_power_kvar", 0]}},
+                "sum_reactive_power_kvar_farm": {"$sum": "$sum_reactive_power_kvar"},
                 "turbine_count": {"$sum": 1},
                 "turbines_operational_now": {"$sum": {"$cond": [{"$eq": ["$last_state", "operational"]}, 1, 0]}},
                 "total_capacity_mw": {"$sum": {"$ifNull": ["$avg_capacity_mw", 0]}},
-                # Also pass arrays of (avg_cp_estimate * energy) if needed later — but we cannot compute Cp here easily
+                # Para el CP ponderado, necesitamos sumar (cp * energia) y (energia)
+                "cp_weighted_numerator": {"$sum": 
+                    {"$multiply": ["$cp_estimate", "$energy_kwh"]}
+                },
+                "cp_weighted_denominator": {"$sum": "$energy_kwh"}
             }}
         ]
 
@@ -293,6 +350,7 @@ class TelemetryDB:
                 "min_wind_speed_mps": None,
                 "avg_voltage_v": None,
                 "avg_power_factor": None,
+                "time_based_availability_pct": None,
                 "farm_cp_weighted": None
             }
 
@@ -309,12 +367,24 @@ class TelemetryDB:
         max_wind_farm = doc.get("max_wind_farm")
         min_wind_farm = doc.get("min_wind_farm")
         avg_voltage_farm = doc.get("avg_voltage_farm")
+        cp_num = doc.get("cp_weighted_numerator")
+        cp_den = doc.get("cp_weighted_denominator")
 
         # Calcular el factor de potencia promedio del parque
         avg_power_factor = None
         apparent_power = (sum_power_kw_farm**2 + sum_reactive_power_kvar_farm**2)**0.5
         if apparent_power > 0:
             avg_power_factor = round(sum_power_kw_farm / apparent_power, 2)
+
+        # Calcular CP ponderado
+        farm_cp_weighted = None
+        if cp_den is not None and cp_num is not None and cp_den > 0:
+            farm_cp_weighted = round(cp_num / cp_den, 4)
+
+        # Calcular disponibilidad basada en tiempo
+        time_based_availability_pct = None
+        if total_samples > 0:
+            time_based_availability_pct = round((total_active_samples / total_samples) * 100.0, 2)
 
 
         # total energy (kWh) aproximado para el farm usando la suma de potencia de muestras
@@ -338,294 +408,323 @@ class TelemetryDB:
         if turbine_count > 0:
             farm_availability_pct = round((turbines_operational_now / turbine_count) * 100.0, 2)
 
-        # avg cp weighted: to compute properly we need per-turbine avg_power & avg_wind -> get with get_metrics_per_turbine_plus
-        per_turbine = self.get_metrics_per_turbine(farm_id=farm_id, minutes=minutes, rotor_radius_m=rotor_radius_m)
-        # compute cp weighted by turbine energy
-        weighted_num = 0.0
-        weighted_den = 0.0
-        for tid, tmetrics in per_turbine.items():
-            e = float(tmetrics.get("energy_kwh") or 0.0)
-            cp = tmetrics.get("avg_power_coefficient_cp")
-            if e and cp is not None:
-                weighted_num += cp * e
-                weighted_den += e
-        farm_cp_weighted = None
-        if weighted_den > 0:
-            farm_cp_weighted = round(weighted_num / weighted_den, 4)
-
-        result = {
-            "avg_wind_speed_mps": None if avg_wind_farm is None else round(avg_wind_farm, 3),
+        return {
+            "avg_wind_speed_mps": round(avg_wind_farm, 3) if avg_wind_farm is not None else None,
             "total_energy_kwh": round(total_energy_kwh, 4),
-            "avg_power_kw": None if avg_power_kw_farm is None else round(avg_power_kw_farm, 3),
+            "avg_power_kw": round(avg_power_kw_farm, 3) if avg_power_kw_farm is not None else None,
             "farm_capacity_factor_pct": farm_capacity_factor_pct,
             "farm_availability_pct": farm_availability_pct,
             "farm_cp_weighted": farm_cp_weighted,
-            "max_wind_speed_mps": None if max_wind_farm is None else round(max_wind_farm, 2),
-            "min_wind_speed_mps": None if min_wind_farm is None else round(min_wind_farm, 2),
-            "avg_voltage_v": None if avg_voltage_farm is None else round(avg_voltage_farm, 2),
-            "avg_power_factor": avg_power_factor
+            "max_wind_speed_mps": round(max_wind_farm, 2) if max_wind_farm is not None else None,
+            "min_wind_speed_mps": round(min_wind_farm, 2) if min_wind_farm is not None else None,
+            "avg_voltage_v": round(avg_voltage_farm, 2) if avg_voltage_farm is not None else None,
+            "avg_power_factor": avg_power_factor,
+            "time_based_availability_pct": time_based_availability_pct
         }
 
-        return result
-
-    def get_hourly_production_last_24h(self, farm_id: int) -> Dict[str, List[Any]]:
+    def get_hourly_production_last_24h(self, farm_id: int) -> List[Dict[str, Any]]:
         """
         Calcula la producción de energía (kWh) por hora para las últimas 24 horas.
+        CORREGIDO: Ahora calcula correctamente la energía por hora.
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
-        
+        col = self.mongo.get_collection("telemetry")
+        latest_record = col.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+
+        if not latest_record:
+            return []
+
+        # Usar la fecha del último registro como referencia
+        ref_time = latest_record['timestamp']
+        end_time = (ref_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+        start_time = end_time - timedelta(hours=24)
+
         pipeline = [
-            {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}}},
+            {"$match": {
+                "farm_id": farm_id,
+                "timestamp": {"$gte": start_time, "$lt": end_time},
+                "active_power_kw": {"$exists": True, "$ne": None}
+            }},
             {"$group": {
-                "_id": {
-                    "year": {"$year": "$timestamp"},
-                    "month": {"$month": "$timestamp"},
-                    "day": {"$dayOfMonth": "$timestamp"},
-                    "hour": {"$hour": "$timestamp"}
-                },
-                "sum_power_kw": {"$sum": "$active_power_kw"},
+                "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "hour"}},
+                "avg_power_kw": {"$avg": "$active_power_kw"},
                 "sample_count": {"$sum": 1}
+            }},
+            # CORRECCIÓN: Calcular energía considerando el número de muestras
+            {"$project": {
+                "energy_kwh": {
+                    "$cond": {
+                        "if": {"$gt": ["$sample_count", 0]},
+                        "then": {
+                            "$multiply": [
+                                "$avg_power_kw",
+                                {"$divide": [60, "$sample_count"]}  # minutos/muestra * horas
+                            ]
+                        },
+                        "else": 0.0
+                    }
+                }
             }},
             {"$sort": {"_id": 1}}
         ]
 
         try:
-            col = self.mongo.get_collection("telemetry")
             results = list(col.aggregate(pipeline))
-        except PyMongoError:
-            return {"hourly_production_kwh": [], "hourly_timestamps": []}
+            production_by_hour = {doc["_id"]: round(doc["energy_kwh"], 2) for doc in results}
+        except PyMongoError as e:
+            print(f"Error en get_hourly_production_last_24h: {e}")
+            return []
 
-        # Crear un diccionario para almacenar la producción por hora
-        production_by_hour = {}
-        for doc in results:
-            group_id = doc["_id"]
-            # Crear un objeto datetime para esta hora
-            dt_hour = datetime(group_id["year"], group_id["month"], group_id["day"], group_id["hour"], tzinfo=timezone.utc)
-            
-            sum_power = doc.get("sum_power_kw") or 0.0
-            sample_count = doc.get("sample_count") or 0
-            
-            if sample_count > 0:
-                # Energía = Potencia media * 1h
-                avg_power = sum_power / sample_count
-                energy_kwh = avg_power * 1
-                production_by_hour[dt_hour] = round(energy_kwh, 2)
+        chart_data = []
+        for i in range(24):
+            current_hour = start_time + timedelta(hours=i)
+            chart_data.append({
+                "timestamp": current_hour.strftime("%H:00"),
+                "value": production_by_hour.get(current_hour, 0.0)
+            })
 
-        # Generar las últimas 24 horas y llenar con los datos
-        now_utc = datetime.now(timezone.utc)
-        hourly_production = []
-        timestamps = []
-        for i in range(23, -1, -1):
-            hour_to_check = now_utc.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
-            hourly_production.append(production_by_hour.get(hour_to_check, 0.0))
-            timestamps.append(hour_to_check.strftime("%H:00"))
-        
-        return {
-            "hourly_production_kwh": hourly_production,
-            "hourly_timestamps": timestamps
-        }
+        return chart_data
 
-    def get_daily_production_last_7_days(self, farm_id: int) -> Dict[str, List[Any]]:
+
+    def get_daily_production_last_7_days(self, farm_id: int) -> List[Dict[str, Any]]:
         """
         Calcula la producción de energía (kWh) por día para los últimos 7 días.
+        CORREGIDO: Calcula correctamente la energía horaria antes de sumarla por día.
         """
-        since = datetime.now(timezone.utc) - timedelta(days=7)
+        col = self.mongo.get_collection("telemetry")
+        latest_record = col.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+
+        if not latest_record:
+            return []
+
+        end_date = latest_record['timestamp'].replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        start_date = end_date - timedelta(days=7)
         
         pipeline = [
-            {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}}},
+            {"$match": {
+                "farm_id": farm_id, 
+                "timestamp": {"$gte": start_date, "$lt": end_date},
+                "active_power_kw": {"$exists": True, "$ne": None}
+            }},
+            # Etapa 1: Agrupar por hora y calcular energía horaria
             {"$group": {
-                "_id": {
-                    "year": {"$year": "$timestamp"},
-                    "month": {"$month": "$timestamp"},
-                    "day": {"$dayOfMonth": "$timestamp"}
-                },
-                "sum_power_kw": {"$sum": "$active_power_kw"},
+                "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "hour", "timezone": "UTC"}},
+                "avg_power_kw": {"$avg": "$active_power_kw"},
                 "sample_count": {"$sum": 1}
+            }},
+            # CORRECCIÓN: Calcular energía horaria correctamente
+            {"$addFields": {
+                "hourly_energy_kwh": {
+                    "$cond": {
+                        "if": {"$gt": ["$sample_count", 0]},
+                        "then": {"$multiply": ["$avg_power_kw", {"$divide": [60, "$sample_count"]}]},
+                        "else": 0.0
+                    }
+                }
+            }},
+            # Etapa 2: Agrupar por día
+            {"$group": {
+                "_id": {"$dateTrunc": {"date": "$_id", "unit": "day", "timezone": "UTC"}},
+                "daily_energy_kwh": {"$sum": "$hourly_energy_kwh"}
             }},
             {"$sort": {"_id": 1}}
         ]
 
         try:
-            col = self.mongo.get_collection("telemetry")
             results = list(col.aggregate(pipeline))
-        except PyMongoError:
-            return {"daily_production_kwh": [], "daily_timestamps": []}
+            production_by_day = {doc["_id"]: round(doc["daily_energy_kwh"], 2) for doc in results}
+        except PyMongoError as e:
+            print(f"Error en get_daily_production_last_7_days: {e}")
+            return []
 
-        production_by_day = {}
-        for doc in results:
-            group_id = doc["_id"]
-            dt_day = datetime(group_id["year"], group_id["month"], group_id["day"], tzinfo=timezone.utc)
-            
-            sum_power = doc.get("sum_power_kw") or 0.0
-            sample_count = doc.get("sample_count") or 0
-            
-            if sample_count > 0:
-                avg_power = sum_power / sample_count
-                energy_kwh = avg_power * 24
-                production_by_day[dt_day] = round(energy_kwh, 2)
-
-        now_utc = datetime.now(timezone.utc)
-        daily_production = []
-        timestamps = []
+        chart_data = []
         day_map = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
-        for i in range(6, -1, -1):
-            day_to_check = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i)
-            daily_production.append(production_by_day.get(day_to_check, 0.0))
-            timestamps.append(day_map[day_to_check.weekday()])
+        for i in range(7):
+            day_to_check = start_date + timedelta(days=i)
+            chart_data.append({
+                "timestamp": day_map[day_to_check.weekday()],
+                "value": production_by_day.get(day_to_check, 0.0)
+            })
         
-        return {
-            "daily_production_kwh": daily_production,
-            "daily_timestamps": timestamps
-        }
+        return chart_data
 
-    def get_monthly_production_last_12_months(self, farm_id: int) -> Dict[str, List[Any]]:
+
+    def get_monthly_production_last_12_months(self, farm_id: int) -> List[Dict[str, Any]]:
         """
         Calcula la producción de energía (kWh) por mes para los últimos 12 meses.
+        CORREGIDO: Calcula correctamente la energía horaria antes de agrupar por día y mes.
         """
-        since = datetime.now(timezone.utc) - timedelta(days=365)
+        col = self.mongo.get_collection("telemetry")
+        latest_record = col.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+
+        if not latest_record:
+            return []
         
+        ref_date = latest_record['timestamp']
+        start_of_ref_month = ref_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        since_year = start_of_ref_month.year
+        since_month = start_of_ref_month.month - 11
+        if since_month <= 0:
+            since_month += 12
+            since_year -= 1
+        since = start_of_ref_month.replace(year=since_year, month=since_month)
+
         pipeline = [
-            {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}}},
+            {"$match": {
+                "farm_id": farm_id, 
+                "timestamp": {"$gte": since},
+                "active_power_kw": {"$exists": True, "$ne": None}
+            }},
+            # Etapa 1: Calcular energía por hora
             {"$group": {
-                "_id": {
-                    "year": {"$year": "$timestamp"},
-                    "month": {"$month": "$timestamp"}
-                },
-                "sum_power_kw": {"$sum": "$active_power_kw"},
+                "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "hour", "timezone": "UTC"}},
+                "avg_power_kw": {"$avg": "$active_power_kw"},
                 "sample_count": {"$sum": 1}
             }},
-            {"$sort": {"_id.year": 1, "_id.month": 1}}
+            # CORRECCIÓN: Calcular energía horaria correctamente
+            {"$addFields": {
+                "hourly_energy_kwh": {
+                    "$cond": {
+                        "if": {"$gt": ["$sample_count", 0]},
+                        "then": {"$multiply": ["$avg_power_kw", {"$divide": [60, "$sample_count"]}]},
+                        "else": 0.0
+                    }
+                }
+            }},
+            # Etapa 2: Agrupar por día
+            {"$group": {
+                "_id": {"$dateTrunc": {"date": "$_id", "unit": "day", "timezone": "UTC"}},
+                "daily_energy_kwh": {"$sum": "$hourly_energy_kwh"}
+            }},
+            # Etapa 3: Agrupar por mes
+            {"$group": {
+                "_id": {"$dateTrunc": {"date": "$_id", "unit": "month", "timezone": "UTC"}},
+                "monthly_energy_kwh": {"$sum": "$daily_energy_kwh"}
+            }},
+            {"$sort": {"_id": 1}}
         ]
 
         try:
-            col = self.mongo.get_collection("telemetry")
             results = list(col.aggregate(pipeline))
-        except PyMongoError:
-            return {"monthly_production_kwh": [], "monthly_timestamps": []}
+            production_by_month = {
+                doc["_id"].strftime("%Y-%m"): round(doc["monthly_energy_kwh"], 2) for doc in results
+            }
+        except PyMongoError as e:
+            print(f"Error en get_monthly_production_last_12_months: {e}")
+            return []
 
-        production_by_month = {}
-        for doc in results:
-            group_id = doc["_id"]
-            # Use the 1st day of the month for the datetime object
-            dt_month = datetime(group_id["year"], group_id["month"], 1, tzinfo=timezone.utc)
-            
-            sum_power = doc.get("sum_power_kw") or 0.0
-            sample_count = doc.get("sample_count") or 0
-            
-            if sample_count > 0:
-                avg_power = sum_power / sample_count
-                # Approximation of hours in a month
-                energy_kwh = avg_power * 24 * 30
-                production_by_month[dt_month] = round(energy_kwh, 2)
-
-        now_utc = datetime.now(timezone.utc)
-        monthly_production = []
-        timestamps = []
+        chart_data = []
         month_map = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
-        for i in range(11, -1, -1):
-            year = now_utc.year
-            month = now_utc.month - i
-            if month <= 0:
-                month += 12
-                year -= 1
-            
-            month_dt = datetime(year, month, 1, tzinfo=timezone.utc)
-            monthly_production.append(production_by_month.get(month_dt, 0.0))
-            timestamps.append(month_map[month - 1])
-        
-        return {
-            "monthly_production_kwh": monthly_production,
-            "monthly_timestamps": timestamps
-        }
+        current_month_date = since
+        for _ in range(12):
+            year = current_month_date.year
+            month = current_month_date.month
+            month_key = f"{year}-{month:02d}"
+            chart_data.append({
+                "timestamp": month_map[month - 1],
+                "value": production_by_month.get(month_key, 0.0)
+            })
+            next_month = month + 1
+            next_year = year
+            if next_month > 12:
+                next_month = 1
+                next_year += 1
+            current_month_date = current_month_date.replace(year=next_year, month=next_month)
 
-    def get_hourly_avg_windspeed_last_24h(self, farm_id: int) -> Dict[str, List[Any]]:
+        return chart_data
+
+
+    def get_hourly_avg_windspeed_last_24h(self, farm_id: int) -> List[Dict[str, Any]]:
         """
         Calcula el promedio de velocidad del viento por hora para las últimas 24 horas.
+        CORREGIDO: Filtro mejorado para valores nulos.
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        col = self.mongo.get_collection("telemetry")
+        latest_record = col.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+
+        if not latest_record:
+            return []
+
+        ref_time = latest_record['timestamp']
+        end_time = (ref_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+        start_time = end_time - timedelta(hours=24)
         
         pipeline = [
-            {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}, "wind_speed_mps": {"$ne": None}}},
+            {"$match": {
+                "farm_id": farm_id, 
+                "timestamp": {"$gte": start_time, "$lt": end_time}, 
+                "wind_speed_mps": {"$exists": True, "$ne": None, "$type": "number"}
+            }},
             {"$group": {
-                "_id": {
-                    "year": {"$year": "$timestamp"},
-                    "month": {"$month": "$timestamp"},
-                    "day": {"$dayOfMonth": "$timestamp"},
-                    "hour": {"$hour": "$timestamp"}
-                },
+                "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "hour", "timezone": "UTC"}},
                 "avg_wind_speed": {"$avg": "$wind_speed_mps"}
             }},
             {"$sort": {"_id": 1}}
         ]
 
         try:
-            col = self.mongo.get_collection("telemetry")
             results = list(col.aggregate(pipeline))
-        except PyMongoError:
-            return {"hourly_avg_wind_speed": [], "hourly_timestamps": []}
+        except PyMongoError as e:
+            print(f"Error en get_hourly_avg_windspeed_last_24h: {e}")
+            return []
 
-        avg_by_hour = {}
-        for doc in results:
-            group_id = doc["_id"]
-            dt_hour = datetime(group_id["year"], group_id["month"], group_id["day"], group_id["hour"], tzinfo=timezone.utc)
-            avg_by_hour[dt_hour] = round(doc.get("avg_wind_speed", 0.0), 2)
+        avg_by_hour = {doc["_id"]: round(doc.get("avg_wind_speed", 0.0), 2) for doc in results}
 
-        now_utc = datetime.now(timezone.utc)
-        hourly_avg = []
-        timestamps = []
-        for i in range(23, -1, -1):
-            hour_to_check = now_utc.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
-            hourly_avg.append(avg_by_hour.get(hour_to_check, 0.0))
-            timestamps.append(hour_to_check.strftime("%H:00"))
+        chart_data = []
+        for i in range(24):
+            hour_to_check = start_time + timedelta(hours=i)
+            chart_data.append({
+                "timestamp": hour_to_check.strftime("%H:00"),
+                "value": avg_by_hour.get(hour_to_check, 0.0)
+            })
         
-        return {
-            "hourly_avg_wind_speed": hourly_avg,
-            "hourly_timestamps": timestamps
-        }
+        return chart_data
 
-    def get_hourly_avg_voltage_last_24h(self, farm_id: int) -> Dict[str, List[Any]]:
+
+    def get_hourly_avg_voltage_last_24h(self, farm_id: int) -> List[Dict[str, Any]]:
         """
         Calcula el promedio de voltaje por hora para las últimas 24 horas.
+        CORREGIDO: Filtro mejorado para valores nulos.
         """
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        col = self.mongo.get_collection("telemetry")
+        latest_record = col.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+
+        if not latest_record:
+            return []
+
+        ref_time = latest_record['timestamp']
+        end_time = (ref_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
+        start_time = end_time - timedelta(hours=24)
         
         pipeline = [
-            {"$match": {"farm_id": farm_id, "timestamp": {"$gte": since}, "output_voltage_v": {"$ne": None}}},
+            {"$match": {
+                "farm_id": farm_id, 
+                "timestamp": {"$gte": start_time, "$lt": end_time}, 
+                "output_voltage_v": {"$exists": True, "$ne": None, "$type": "number"}
+            }},
             {"$group": {
-                "_id": {
-                    "year": {"$year": "$timestamp"},
-                    "month": {"$month": "$timestamp"},
-                    "day": {"$dayOfMonth": "$timestamp"},
-                    "hour": {"$hour": "$timestamp"}
-                },
+                "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "hour", "timezone": "UTC"}},
                 "avg_voltage": {"$avg": "$output_voltage_v"}
             }},
             {"$sort": {"_id": 1}}
         ]
 
         try:
-            col = self.mongo.get_collection("telemetry")
             results = list(col.aggregate(pipeline))
-        except PyMongoError:
-            return {"hourly_avg_voltage": [], "hourly_timestamps": []}
+        except PyMongoError as e:
+            print(f"Error en get_hourly_avg_voltage_last_24h: {e}")
+            return []
 
-        avg_by_hour = {}
-        for doc in results:
-            group_id = doc["_id"]
-            dt_hour = datetime(group_id["year"], group_id["month"], group_id["day"], group_id["hour"], tzinfo=timezone.utc)
-            avg_by_hour[dt_hour] = round(doc.get("avg_voltage", 0.0), 2)
+        avg_by_hour = {doc["_id"]: round(doc.get("avg_voltage", 0.0), 2) for doc in results}
 
-        now_utc = datetime.now(timezone.utc)
-        hourly_avg = []
-        timestamps = []
-        for i in range(23, -1, -1):
-            hour_to_check = now_utc.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
-            hourly_avg.append(avg_by_hour.get(hour_to_check, 0.0))
-            timestamps.append(hour_to_check.strftime("%H:00"))
+        chart_data = []
+        for i in range(24):
+            hour_to_check = start_time + timedelta(hours=i)
+            chart_data.append({
+                "timestamp": hour_to_check.strftime("%H:00"),
+                "value": avg_by_hour.get(hour_to_check, 0.0)
+            })
         
-        return {
-            "hourly_avg_voltage": hourly_avg,
-            "hourly_timestamps": timestamps
-        }
+        return chart_data

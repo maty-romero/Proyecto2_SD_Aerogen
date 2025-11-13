@@ -70,27 +70,22 @@ class StatNode:
 
             # 1. Obtener métricas agregadas del farm desde la BD
             farm_metrics = self.db_service.get_metrics_farm(farm_id=farm_id, minutes=5)
-            if not farm_metrics or farm_metrics.get("avg_power_kw") is None:
+            if not farm_metrics:
                 print("[StatNode] No hay suficientes datos en la BD para calcular métricas del parque.")
                 continue
 
             # 2. Obtener producción horaria de las últimas 24h
             hourly_data = self.db_service.get_hourly_production_last_24h(farm_id=farm_id)
-            print(f"[StatNode] Hourly data: {hourly_data}")
 
             # 3. Obtener producción diaria de los últimos 7 días
             daily_data = self.db_service.get_daily_production_last_7_days(farm_id=farm_id)
-            print(f"[StatNode] Daily data: {daily_data}")
 
             # 4. Obtener producción mensual de los últimos 12 meses
             monthly_data = self.db_service.get_monthly_production_last_12_months(farm_id=farm_id)
-            print(f"[StatNode] Monthly data: {monthly_data}")
 
             # 5. Obtener promedios horarios de viento y voltaje
             wind_speed_data = self.db_service.get_hourly_avg_windspeed_last_24h(farm_id=farm_id)
-            print(f"[StatNode] Wind speed data: {wind_speed_data}")
             voltage_data = self.db_service.get_hourly_avg_voltage_last_24h(farm_id=farm_id)
-            print(f"[StatNode] Voltage data: {voltage_data}")
 
             # 6. Obtener conteo de turbinas por estado desde la memoria (más rápido y en tiempo real)
             turbine_counts = self._get_turbine_counts_by_state()
@@ -106,27 +101,28 @@ class StatNode:
 
                 # --- Métricas agregadas del parque (de la BD) ---
                 # Usamos .get() para evitar KeyErrors si una métrica no se puede calcular
-                "total_active_power_kw": farm_metrics.get("avg_power_kw"), # El frontend espera total_active_power_kw
-                "total_energy_kwh": farm_metrics.get("total_energy_kwh"), # No está en el doc del front, pero es útil
+                # NOTA: El frontend esperaba 'total_active_power_kw', pero el valor es un promedio.
+                # Se renombra a 'avg_active_power_kw' para mayor claridad.
+                "avg_active_power_kw": farm_metrics.get("avg_power_kw"),
+                "total_energy_kwh": farm_metrics.get("total_energy_kwh"),
                 "avg_wind_speed_mps": farm_metrics.get("avg_wind_speed_mps"),
                 "max_wind_speed_mps": farm_metrics.get("max_wind_speed_mps"),
                 "min_wind_speed_mps": farm_metrics.get("min_wind_speed_mps"),
                 "avg_power_factor": farm_metrics.get("avg_power_factor"),
                 "avg_voltage_v": farm_metrics.get("avg_voltage_v"),
+                "farm_availability_pct": farm_metrics.get("farm_availability_pct"), # Disponibilidad instantánea
+                "time_based_availability_pct": farm_metrics.get("time_based_availability_pct"), # Disponibilidad en el tiempo (más precisa)
+                "farm_cp_weighted": farm_metrics.get("farm_cp_weighted"), # Coeficiente de potencia ponderado
                 # "predominant_wind_direction_deg": farm_metrics.get("predominant_wind_direction_deg"), # Nota: Esto no se calcula aún
 
-                # --- Datos para gráficos (estructura plana, como espera el frontend) ---
-                "hourly_production_kwh": hourly_data.get("hourly_production_kwh", []),
-                "hourly_timestamps": hourly_data.get("hourly_timestamps", []),
-                "daily_production_kwh": daily_data.get("daily_production_kwh", []),
-                "daily_timestamps": daily_data.get("daily_timestamps", []),
-                "monthly_production_kwh": monthly_data.get("monthly_production_kwh", []),
-                "monthly_timestamps": monthly_data.get("monthly_timestamps", []),
-                "hourly_avg_wind_speed": wind_speed_data.get("hourly_avg_wind_speed", []),
-                "hourly_avg_voltage": voltage_data.get("hourly_avg_voltage", [])
+                # --- Datos para gráficos (lista de objetos {timestamp, value}) ---
+                "hourly_production_chart": hourly_data,
+                "daily_production_chart": daily_data,
+                "monthly_production_chart": monthly_data,
+                "hourly_wind_speed_chart": wind_speed_data,
+                "hourly_voltage_chart": voltage_data
             }
 
-            print(f"[StatNode] Publishing stats: {stats_payload}")
             self.mqtt_client.publish(STATS_TOPIC, stats_payload, qos=1)
             print(f"[StatNode] Estadísticas publicadas: {turbine_counts.get('operational', 0)}/{total_turbines} activas.")
     

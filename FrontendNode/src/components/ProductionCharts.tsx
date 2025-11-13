@@ -19,11 +19,32 @@ export function ProductionCharts({
   compact = false
 }: ProductionChartsProps) {
 
-  // Combinar datos horarios para el gráfico de viento y voltaje
-  const combinedHourlyData = hourlyProduction.map((prod, index) => ({
-    ...prod,
-    windSpeed: hourlyWindSpeed[index]?.windSpeed || 0,
-    voltage: hourlyVoltage[index]?.voltage || 0,
+  // Combinar datos horarios de forma robusta usando el timestamp (hora) como clave
+  const combinedHourlyData = hourlyProduction.map(prod => {
+    const windData = hourlyWindSpeed.find(w => w.hour === prod.hour);
+    const voltageData = hourlyVoltage.find(v => v.hour === prod.hour);
+    return {
+      hour: prod.hour,
+      power: prod.power,
+      windSpeed: windData?.windSpeed || 0,
+      voltage: voltageData?.voltage || 0,
+    };
+  });
+
+  // Datos para el gráfico de Potencia Activa (usamos los datos combinados por consistencia)
+  const powerChartData = combinedHourlyData.map(d => ({
+    hour: d.hour, power: d.power
+  }));
+
+  // Convertir producción a MWh o GWh para mejor legibilidad en los gráficos
+  const weeklyProductionMWh = weeklyProduction.map(d => ({
+    ...d,
+    production: parseFloat((d.production / 1000).toFixed(2)) // kWh a MWh
+  }));
+
+  const monthlyProductionGWh = monthlyProduction.map(d => ({
+    ...d,
+    production: parseFloat((d.production / 1000000).toFixed(2)) // kWh a GWh
   }));
 
   return (
@@ -32,7 +53,7 @@ export function ProductionCharts({
       <Card className="p-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-slate-900 dark:text-slate-100 mb-4">Potencia Activa en Tiempo Real (24h)</h3>
         <ResponsiveContainer width="100%" height={compact ? 250 : 350}>
-          <AreaChart data={hourlyProduction}>
+          <AreaChart data={powerChartData}>
             <defs>
               <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -77,7 +98,7 @@ export function ProductionCharts({
           <Card className="p-6 dark:bg-slate-900 dark:border-slate-800">
             <h3 className="text-slate-900 dark:text-slate-100 mb-4">Producción Semanal</h3>
             <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={weeklyProduction}>
+              <BarChart data={weeklyProductionMWh}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
                 <XAxis
                   dataKey="day"
@@ -163,7 +184,7 @@ export function ProductionCharts({
           <Card className="p-6 dark:bg-slate-900 dark:border-slate-800">
             <h3 className="text-slate-900 dark:text-slate-100 mb-4">Tendencias Mensuales</h3>
             <ResponsiveContainer width="100%" height={350}>
-              <LineChart data={monthlyProduction}>
+              <LineChart data={monthlyProductionGWh}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-700" />
                 <XAxis
                   dataKey="month"
@@ -174,7 +195,7 @@ export function ProductionCharts({
                   yAxisId="left"
                   className="text-slate-600 dark:text-slate-400"
                   tick={{ fontSize: 12 }}
-                  label={{ value: 'MWh', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
+                  label={{ value: 'GWh', angle: -90, position: 'insideLeft', style: { fontSize: 12 } }}
                 />
                 <Tooltip
                   contentStyle={{
@@ -191,7 +212,7 @@ export function ProductionCharts({
                   dataKey="production"
                   stroke="#3b82f6"
                   strokeWidth={2}
-                  name="Producción (MWh)"
+                  name="Producción (GWh)"
                   dot={{ r: 4 }}
                 />
               </LineChart>
@@ -202,4 +223,3 @@ export function ProductionCharts({
     </div>
   );
 }
-
