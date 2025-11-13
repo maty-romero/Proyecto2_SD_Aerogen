@@ -1,3 +1,16 @@
+# Ignorar directorios de dependencias de Node.js
+FrontendNode/node_modules
+
+# Ignorar todos los archivos y carpetas dentro de EMQX/
+EMQX/data/**
+
+# Excepción para no ignorar el archivo cluster.hocon dentro de EMQX/
+!EMQX/data/configs/cluster.hocon
+
+# Archivos de entorno local que no deben ir en la imagen
+# Ignoramos el .env general, pero no los específicos como .env.frontend
+#/.env
+
 # Caché de Python
 __pycache__/
 *.py[cod]
