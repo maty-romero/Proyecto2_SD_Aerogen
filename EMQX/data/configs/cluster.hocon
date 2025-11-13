@@ -16,59 +16,68 @@ authorization {
     }
   ]
 }
+
+# ===================================================================
+# =                        MOTOR DE REGLAS                          =
+# ===================================================================
+# Aquí se define el pipeline de procesamiento de mensajes.
+# Cada mensaje que llega al broker puede ser procesado por estas reglas.
 rule_engine {
   ignore_sys_message = true
   jq_function_default_timeout = "10s"
   rules {
+    # --- REGLA DE ALERTA: TEMPERATURA DE RODAMIENTOS ---
     rule_bearing_temperature {
       actions = [
         {
+          # ACCIÓN: Re-publicar un nuevo mensaje.
           args {
             mqtt_properties {}
             payload = ""
-            qos = "1"
+            qos = 1
             retain = false
-            topic = "farms/${farm_id}/alerts/turbines/${turbine_id}"
+            topic = "farms/${farm_id}/alerts"
             user_properties = ""
           }
           function = republish
         }
       ]
-      description = ""
+      description = "Genera una alerta crítica si la temperatura de los rodamientos supera los 90°C."
       enable = true
       metadata {created_at = 1762296497770}
-      name = ""
-      sql = """~
+      name = ""      sql = """~
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
           payload.farm_name AS farm_name,
           payload.turbine_name AS turbine_name,
           payload.bearing_temperature_c AS bearing_temperature_c,
-          payload.timestamp AS timestamp,
+          'mechanical' AS alert_type, payload.timestamp AS timestamp, 'critical' AS severity,
           'Bearing temperature in critical levels' AS message
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.bearing_temperature_c > 90~"""
+        WHERE payload.operational_state = 'operational'
+          AND payload.bearing_temperature_c > 90~"""
     }
+    # --- REGLA DE ALERTA: TEMPERATURA DEL ENGRANAJE ---
     rule_gear_temperature {
       actions = [
         {
+          # ACCIÓN: Re-publicar un nuevo mensaje de alerta.
           args {
             mqtt_properties {}
             payload = ""
             qos = 1
             retain = false
-            topic = "farms/${farm_id}/alerts/turbines/${turbine_id} "
+            topic = "farms/${farm_id}/alerts"
             user_properties = ""
           }
           function = republish
         }
       ]
-      description = ""
+      description = "Genera una alerta crítica si la temperatura de la caja de engranajes supera los 100°C."
       enable = true
       metadata {created_at = 1762295635867}
-      name = ""
-      sql = """~
+      name = ""      sql = """~
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -76,30 +85,34 @@ rule_engine {
           payload.turbine_name AS turbine_name,
           'mechanical' AS alert_type,
           'critical' AS severity,
+          payload.gear_temperature_c AS gear_temperature_c,
           'Gear temperature in critical levels' AS message,
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.gear_temperature_c > 100~"""
+        WHERE payload.operational_state = 'operational'
+          AND payload.gear_temperature_c > 100~"""
     }
+    # --- REGLA DE FILTRADO: LIMPIEZA DE TELEMETRÍA ---
     rule_noisy_telemetry {
       actions = [
         {
+          # ACCIÓN: Re-publicar el mensaje original (ya filtrado) en un nuevo tópico.
           args {
             mqtt_properties {}
             payload = ""
             qos = 1
             retain = false
+            # El tópico de destino es dinámico, usando las variables del tópico original.
             topic = "farms/${farm_id}/turbines/${turbine_id}/clean_telemetry"
             user_properties = ""
           }
           function = republish
         }
       ]
-      description = ""
+      description = "Filtra la telemetría ruidosa o inválida y re-publica los datos limpios en un tópico 'clean'."
       enable = true
       metadata {created_at = 1762530126559}
-      name = ""
-      sql = """~
+      name = ""      sql = """~
         SELECT
           payload.farm_id                     AS farm_id,
           payload.farm_name                    AS farm_name,
@@ -130,6 +143,304 @@ rule_engine {
           AND payload.rotor_speed_rpm >= 0 AND payload.rotor_speed_rpm <= 2000
           AND payload.bearing_temperature_c >= -10 AND payload.bearing_temperature_c <= 100
       ~"""
+    }
+    # --- REGLA DE ALERTA: VIBRACIONES ALTAS ---
+    rule_high_vibrations {
+      actions = [
+        {
+          # ACCIÓN: Re-publicar un nuevo mensaje de alerta.
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta de advertencia si los niveles de vibración superan 4.5 mm/s."
+      enable = true
+      metadata {created_at = 1762531000000}
+      name = ""      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'mechanical' AS alert_type,
+          'warning' AS severity,
+          payload.vibrations_mms AS vibrations_mms,
+          'High vibration levels detected' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'operational'
+          AND payload.vibrations_mms > 4.5~"""
+    }
+    # --- REGLA DE ALERTA: ESTADO DE FALLO OPERACIONAL ---
+    rule_operational_fault {
+      actions = [
+        {
+          # ACCIÓN: Re-publicar un nuevo mensaje de alerta.
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta crítica si la turbina reporta explícitamente un estado de 'fault'."
+      enable = true
+      metadata {created_at = 1762531000002}
+      name = ""      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'operational' AS alert_type,
+          'critical' AS severity,
+          payload.operational_state AS operational_state,
+          'Turbine has reported a fault state' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'fault'~"""
+    }
+    # --- REGLA DE ALERTA: SOBRERREVOLUCIÓN DEL ROTOR ---
+    rule_rotor_overspeed {
+      actions = [
+        {
+          # ACCIÓN: Re-publicar un nuevo mensaje de alerta.
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta crítica si la velocidad del rotor supera las 35 RPM."
+      enable = true
+      metadata {created_at = 1762531000001}
+      name = ""      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'mechanical' AS alert_type,
+          'critical' AS severity,
+          payload.rotor_speed_rpm AS rotor_speed_rpm,
+          'Rotor overspeed detected. Risk of mechanical failure.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'operational'
+          AND payload.rotor_speed_rpm > 35~"""
+    }
+    # --- REGLA DE ALERTA: BAJA PRODUCCIÓN CON VIENTO FUERTE ---
+    rule_low_production_high_wind {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta si la turbina está operativa con viento fuerte pero no genera suficiente energía."
+      enable = true
+      metadata {created_at = 1762532000000}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'performance' AS alert_type,
+          'warning' AS severity,
+          'Low power output detected despite high wind speed.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE
+          payload.operational_state = 'operational'
+          AND payload.wind_speed_mps > 8
+          AND payload.active_power_kw < 50~"""
+    }
+    # --- REGLA DE ALERTA: PÉRDIDA DE COMUNICACIÓN (TURBINA OFFLINE) ---
+    rule_turbine_offline {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta cuando una turbina se desconecta (basado en LWT)."
+      enable = true
+      metadata {created_at = 1762532000001}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'connectivity' AS alert_type,
+          'critical' AS severity,
+          'Turbine has gone offline. Communication lost.' AS message,
+          now_rfc3339() AS timestamp
+        FROM "farms/+/turbines/+/status"
+        WHERE payload.state = 'offline'~"""
+    }
+    # --- REGLA DE ALERTA: FACTOR DE POTENCIA ANÓMALO ---
+    rule_low_power_factor {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta si el factor de potencia es bajo mientras la turbina está generando energía."
+      enable = true
+      metadata {created_at = 1762532000002}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'electrical' AS alert_type,
+          'warning' AS severity,
+          'Anomalous power factor detected.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE
+          payload.active_power_kw > 100
+          AND (payload.active_power_kw / sqrt(pow(payload.active_power_kw, 2) + pow(payload.reactive_power_kvar, 2))) < 0.9~"""
+    }
+    # --- REGLA DE ALERTA: TURBINA EN MANTENIMIENTO ---
+    rule_turbine_maintenance {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta informativa cuando una turbina entra en estado de mantenimiento."
+      enable = true
+      metadata {created_at = 1762534000000}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'operational' AS alert_type,
+          'info' AS severity,
+          'Turbine has entered maintenance state.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'maintenance'~"""
+    }
+    # --- REGLA DE ALERTA: TURBINA DETENIDA ---
+    rule_turbine_stopped {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta informativa cuando una turbina entra en estado detenido."
+      enable = true
+      metadata {created_at = 1762534000001}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'operational' AS alert_type,
+          'info' AS severity,
+          'Turbine has been stopped.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'stopped'~"""
+    }
+    # --- REGLA DE ALERTA: TURBINA EN STANDBY ---
+    rule_turbine_standby {
+      actions = [
+        {
+          args {
+            mqtt_properties {}
+            payload = ""
+            qos = 1
+            retain = false
+            topic = "farms/${farm_id}/alerts"
+            user_properties = ""
+          }
+          function = republish
+        }
+      ]
+      description = "Genera una alerta informativa cuando una turbina entra en estado de espera (standby)."
+      enable = true
+      metadata {created_at = 1762535000000}
+      name = ""
+      sql = """~
+        SELECT
+          payload.farm_id AS farm_id,
+          payload.turbine_id AS turbine_id,
+          payload.farm_name AS farm_name,
+          payload.turbine_name AS turbine_name,
+          'operational' AS alert_type,
+          'info' AS severity,
+          'Turbine has entered standby mode.' AS message,
+          payload.timestamp AS timestamp
+        FROM "farms/+/turbines/+/raw_telemetry"
+        WHERE payload.operational_state = 'standby'~"""
     }
   }
 }

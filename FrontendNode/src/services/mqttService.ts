@@ -118,11 +118,10 @@ export class MqttService {
     // Suscribirse a mediciones de todas las turbinas
     this.subscribe('farms/1/turbines/+/clean_telemetry');
     
-    // Suscribirse a alertas
-    this.subscribe('farms/1/alerts/turbines/+'); // por ahora para testing 
+    // Suscribirse a todas las alertas del parque
+    this.subscribe('farms/1/alerts');
     
     // Suscribirse a estadísticas generales
-    // farms/${farm_id}/alerts/turbines/${turbine_id} 
     this.subscribe('farms/1/stats');
     
     console.log('Suscrito a tópicos MQTT');
@@ -160,7 +159,10 @@ export class MqttService {
       'mecanica': 'mechanical',
       'environmental': 'environmental',
       'ambiental': 'environmental',
-      'system': 'system',
+      'operational': 'operational', // Añadido para estados de turbina
+      'performance': 'performance', // Añadido para alertas de rendimiento
+      'connectivity': 'connectivity', // Añadido para alertas de conectividad
+      'system': 'system', 
       'sistema': 'system'
     };
     
@@ -182,6 +184,7 @@ export class MqttService {
     
     return {
       turbineId: String(flatAlert.turbine_id),
+      turbineName: flatAlert.turbine_name,
       type: type,
       severity: severity,
       message: flatAlert.message + (flatAlert.details ? ` - ${flatAlert.details}` : ''),
@@ -318,14 +321,15 @@ export class MqttService {
         const turbineId = String(flatMsg.turbine_id);
         const structuredMessage = this.transformFlatMessage(flatMsg);
         const metadata = {
-          name:  flatMsg.turbine_name,
+          name: flatMsg.turbine_name,
           capacity: flatMsg.capacity_mw
         };
         this.handleTurbineMessage(turbineId, structuredMessage, metadata);
-      } else if (topic.startsWith('farms/1/alerts/turbines/')) {
-        // Mensaje plano de alerta - transformar antes de procesar
+      } else if (topic === 'farms/1/alerts') {
+        // Mensaje de alerta unificado
         const flatAlert = message as MqttFlatAlert;
         const structuredAlert = this.transformFlatAlert(flatAlert);
+        console.log('[MQTT INCOMING] Structured Alert:', structuredAlert); // Para depuración
         this.handleAlertMessage(structuredAlert);
       } else if (topic === 'farms/1/stats') {
         // Mensaje plano de estadísticas - transformar antes de procesar

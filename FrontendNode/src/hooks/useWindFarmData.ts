@@ -128,7 +128,7 @@ export const useWindFarmData = (options: UseWindFarmDataOptions = {}) => {
     const newAlert: Alert = {
       id: `alert-${Date.now()}-${Math.random()}`,
       turbineId: message.turbineId,
-      turbineName: `Turbina ${message.turbineId}`,
+      turbineName: message.turbineName,
       type: message.type,
       severity: message.severity,
       message: message.message,

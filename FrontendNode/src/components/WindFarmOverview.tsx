@@ -2,6 +2,7 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Wind, Zap, TrendingUp, AlertTriangle, Clock, Activity } from 'lucide-react';
 import { Progress } from './ui/progress';
+import { Alert } from '../types/turbine';
 
 interface WindFarmOverviewProps {
   farmStats: {
@@ -12,16 +13,17 @@ interface WindFarmOverviewProps {
     averageWindSpeed?: number;
     averageVoltage?: number;
   } | null;
+  alerts: Alert[];
 }
 
-export function WindFarmOverview({ farmStats }: WindFarmOverviewProps) {
+export function WindFarmOverview({ farmStats, alerts }: WindFarmOverviewProps) {
   const totalPowerMW = (farmStats?.totalPower || 0) / 1000;
   const totalCapacity = (farmStats?.totalTurbines || 24) * 2.5;
   const activeTurbines = farmStats?.activeTurbines || 0;
   const totalTurbines = farmStats?.totalTurbines || 24;
   const avgPowerFactor = farmStats?.averagePowerFactor || 0;
   const avgWindSpeed = farmStats?.averageWindSpeed || 0;
-  const alerts = 0; // This should come from alerts data
+  const activeAlerts = alerts.filter(a => !a.resolvedAt).length;
 
   const utilizationRate = (totalPowerMW / totalCapacity) * 100;
 
@@ -85,7 +87,7 @@ export function WindFarmOverview({ farmStats }: WindFarmOverviewProps) {
           <div className="flex items-start justify-between">
             <div className="space-y-2">
               <p className="text-slate-500 dark:text-slate-400 text-sm">Alertas Activas</p>
-              <p className="text-3xl text-slate-900 dark:text-slate-100">{alerts}</p>
+              <p className="text-3xl text-slate-900 dark:text-slate-100">{activeAlerts}</p>
               <p className="text-slate-500 dark:text-slate-400 text-sm">Atención requerida</p>
             </div>
             <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded-lg">
@@ -93,7 +95,7 @@ export function WindFarmOverview({ farmStats }: WindFarmOverviewProps) {
             </div>
           </div>
           <div className="mt-4">
-            {alerts > 0 ? (
+            {activeAlerts > 0 ? (
               <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
                 Requiere atención
               </Badge>

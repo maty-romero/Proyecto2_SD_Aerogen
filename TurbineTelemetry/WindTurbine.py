@@ -90,15 +90,14 @@ class WindTurbine:
             "capacity_mw": capacity_mw
         }
             
-    # Introduce ruido en los datos de telemetría para simular fallos
     def make_telemetry_noisy(self, raw_payload: dict) -> dict:
-        # partimos del payload sin ruido
+        """Introduce ruido en los campos clave para simular un fallo de sensor generalizado."""
         fail_choices = [
             None,
-            -9999,     # fuera rango negativo
-            999999.9   # fuera rango positivo
+            -9999,
+            999999.9
         ]
-        # Forzamos que *todos* fallen (estricto)
+        # Forzamos que todos los campos clave fallen a la vez para asegurar que el mensaje se descarte.
         raw_payload["wind_speed_mps"] = random.choice(fail_choices)
         raw_payload["rotor_speed_rpm"] = random.choice(fail_choices)
         raw_payload["bearing_temperature_c"] = random.choice(fail_choices)

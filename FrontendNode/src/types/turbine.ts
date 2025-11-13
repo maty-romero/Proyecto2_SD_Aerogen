@@ -3,7 +3,12 @@ export type TurbineStatus = 'operational' | 'stopped' | 'fault' | 'maintenance' 
 
 // Alert types
 export type AlertSeverity = 'critical' | 'warning' | 'info';
-export type AlertType = 'electrical' | 'mechanical' | 'environmental' | 'system';
+export type AlertType = 
+  | 'electrical' 
+  | 'mechanical' 
+  | 'environmental' 
+  | 'system'
+  | 'operational' | 'performance' | 'connectivity';
 
 // Environmental variables (solo viento por molino)
 export interface EnvironmentalData {
@@ -183,6 +188,7 @@ export interface MqttFlatStats {
 // Formato estructurado de alerta (usado internamente)
 export interface MqttAlertMessage {
   turbineId: string;
+  turbineName: string;
   type: AlertType;
   severity: AlertSeverity;
   message: string;

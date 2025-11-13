@@ -35,21 +35,8 @@ class StatNode:
 
             if turbine_id is not None:
                 with self.data_lock:
-                    previous_state = self.turbines_data.get(turbine_id, {}).get("operational_state")
                     # Guardamos los datos más recientes en memoria para tener un conteo rápido de turbinas
                     self.turbines_data[turbine_id] = payload
-
-                # --- Sistema de Alertas ---
-                # Si el estado actual es 'fault' y el anterior no lo era, se envía una alerta.
-                if operational_state == "fault" and previous_state != "fault":
-                    alert_payload = {
-                        "turbine_id": turbine_id,
-                        "farm_id": payload.get("farm_id"),
-                        "timestamp": payload.get("timestamp"),
-                        "message": f"Alerta: Turbina {turbine_id} ha entrado en estado de 'fault'."
-                    }
-                    print(f"[StatNode] ALERTA: Publicando fallo para turbina {turbine_id}")
-                    self.mqtt_client.publish(ALERTS_TOPIC, alert_payload, qos=2) # Usamos QoS 2 para asegurar la entrega
 
         except (json.JSONDecodeError, KeyError) as e:
             print(f"[StatNode] Error procesando mensaje: {e}")
