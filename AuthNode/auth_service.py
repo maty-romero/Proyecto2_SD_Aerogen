@@ -196,18 +196,19 @@ class AuthService:
 
     def seed_roles(self):
         wind_turbine_rules = [
-            {"permission": "allow", "action": "publish", "topic_template": "/farm/{farm_id}/turbine/{turbine_id}/clean_telemetry", "sort_order": 10},
-            {"permission": "allow", "action": "subscribe", "topic_template": "/farm/{farm_id}/turbine/{turbine_id}/commands", "sort_order": 20},
-            {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 1000}
+            {"permission": "allow", "action": "publish", "topic_template": "farm/{farm_id}/turbine/{turbine_id}/raw_telemetry", "sort_order": 10},
+            {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 20}
         ]
         front_node_rules = [
-            {"permission": "allow", "action": "subscribe", "topic_template": "/farm/+/turbine/+/clean_telemetry", "sort_order": 10},
-            {"permission": "allow", "action": "publish", "topic_template": "/farm/+/aggregated/telemetry", "sort_order": 20},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/turbine/+/clean_telemetry", "sort_order": 10},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/stats", "sort_order": 20},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+", "sort_order": 30},
             {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 1000}
         ]
         stat_node_rules = [
-            {"permission": "allow", "action": "subscribe", "topic_template": "/farm/+/aggregated/#", "sort_order": 10},
-            {"permission": "allow", "action": "publish", "topic_template": "/farm/+/stats/{metric}", "sort_order": 20},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/turbine/+/clean_telemetry", "sort_order": 10},
+            {"permission": "allow", "action": "publish", "topic_template": "farm/+/stats", "sort_order": 20},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+", "sort_order": 30},
             {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 1000}
         ]
 

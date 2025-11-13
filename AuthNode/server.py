@@ -8,7 +8,8 @@ if os.environ.get("CLEAN_DB_ON_STARTUP", "false").lower() in ("1", "true", "yes"
     svc.clear_db(drop_collections=True) # Limpiar DB para arranque limpio 
     # Seed roles y usuarios
     svc.seed_roles() 
-    farms = [{"farm_id": 1, "turbines": [1, 2]}, {"farm_id": 2, "turbines": [1]}]
+    turbines_id_list = list(range(1, 51))
+    farms = [{"farm_id": 1, "turbines": turbines_id_list}]
     svc.seed_users(farms=farms, seed_password=os.environ.get("DEFAULT_SEED_PASSWORD", "MiPassComun123"))
 
 app = Flask(__name__)

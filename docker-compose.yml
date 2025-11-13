@@ -55,47 +55,47 @@ services:
       - windfarm_net
     
 
-  # simulator:
-  #   build:
-  #     context: .
-  #     dockerfile: python.Dockerfile
-  #   container_name: windfarm_simulator
-  #   command: python -m TurbineTelemetry.main
-  #   depends_on:
-  #     - emqx
-  #   environment:
-  #     # El host del broker es el nombre del servicio 'emqx'
-  #     - MQTT_BROKER_HOST=emqx
-  #   networks:
-  #     - windfarm_net
+  simulator:
+    build:
+      context: .
+      dockerfile: python.Dockerfile
+    container_name: windfarm_simulator
+    command: python -m TurbineTelemetry.main
+    depends_on:
+      - emqx
+    environment:
+      # El host del broker es el nombre del servicio 'emqx'
+      - MQTT_BROKER_HOST=emqx
+    networks:
+      - windfarm_net
       
-  # statnode:
-  #   build:
-  #     context: .                     # raíz del repo
-  #     dockerfile: ./StatNode/Dockerfile
-  #   container_name: windfarm_statnode
-  #   depends_on:
-  #     - emqx
-  #     - mongo
-  #   environment:
-  #     - MQTT_BROKER_HOST=emqx
-  #     - MONGO_URI=mongodb://mongo_windfarm:27017
-  #   env_file:
-  #     - ./StatNode/.env
-  #   ports:
-  #     - "5000:5000"
-  #   networks:
-  #     - windfarm_net
+  statnode:
+    build:
+      context: .                     # raíz del repo
+      dockerfile: ./StatNode/Dockerfile
+    container_name: windfarm_statnode
+    depends_on:
+      - emqx
+      - mongo_windfarm
+    environment:
+      - MQTT_BROKER_HOST=emqx
+      - MONGO_URI=mongodb://mongo_windfarm:27017
+    env_file:
+      - ./StatNode/.env
+    ports:
+      - "5000:5000"
+    networks:
+      - windfarm_net
   
-  # frontend_debugger:
-  #   build:
-  #     context: ./FrontendNode
-  #     dockerfile: Dockerfile
-  #   container_name: windfarm_frontend_debugger
-  #   ports:
-  #     - "8080:8080"
-  #   networks:
-  #     - windfarm_net
+  frontend_debugger:
+    build:
+      context: ./FrontendNode
+      dockerfile: Dockerfile
+    container_name: windfarm_frontend_debugger
+    ports:
+      - "8080:8080"
+    networks:
+      - windfarm_net
 
 
 networks:
