@@ -2,3 +2,7 @@
 __pycache__/
 *.py[cod]
 *.pyc 
+
+# Generated dataset files
+dataset.json
+generator_state.json

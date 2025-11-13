@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { WindFarmOverview } from './components/WindFarmOverview';
+import { WindFarmOverview } from './components/WindFarmOverview'; // Este componente será modificado
 import { TurbineGrid } from './components/TurbineGrid';
 import { ProductionCharts } from './components/ProductionCharts';
 import { AlertsPanel } from './components/AlertsPanel';
@@ -10,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Button } from './components/ui/button';
 import { Wind, Sun, Moon } from 'lucide-react';
 import { useWindFarmData } from './hooks/useWindFarmData';
+
+// Importamos los componentes que usará WindFarmOverview
+import { Card } from './components/ui/card';
+import { Gauge, Zap, Activity, ShieldCheck, Wind as WindIcon } from 'lucide-react';
 
 function AppContent() {
   const [selectedTab, setSelectedTab] = useState('overview');
@@ -85,7 +89,7 @@ function AppContent() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <WindFarmOverview farmStats={farmStats} />
+            <WindFarmOverview farmStats={farmStats} alerts={alerts} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <ProductionCharts 
