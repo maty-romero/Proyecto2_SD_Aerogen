@@ -26,7 +26,9 @@ services:
   #       - FLASK_ENV=development
 
   mongo:
-    image: mongo:latest
+    build:
+      context: .              # Contexto en la raíz (donde están dataset.json e init-mongo.js)
+      dockerfile: mongoFiles/Dockerfile  # Ruta al Dockerfile
     container_name: mongo_windfarm
     ports:
       - "27017:27017"
