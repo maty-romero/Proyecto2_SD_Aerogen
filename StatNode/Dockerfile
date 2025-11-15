@@ -1,30 +1,26 @@
-# Ejemplo minimo app flask 
-
 FROM python:3.8-slim-buster
 
-WORKDIR /StatNode
+# Establecemos el directorio de trabajo principal
+WORKDIR /app
 
-# Instalar dependencias del sistema si hace falta
-#RUN apt-get update && apt-get install -y --no-install-recommends \
-#    build-essential \
-#    && rm -rf /var/lib/apt/lists/*
+# Copiar requirements y instalar dependencias
+COPY StatNode/requirements.txt ./StatNode/requirements.txt
+RUN pip3 install --no-cache-dir -r ./StatNode/requirements.txt
 
-# Copiar solo requirements primero (para usar cache)
-COPY StatNode/requirements.txt ./requirements.txt
+# Copiar el código fuente creando la estructura de paquetes correcta
+COPY StatNode/ ./StatNode/
+COPY Shared/ ./Shared/
 
-RUN pip3 install --no-cache-dir -r requirements.txt
+# Corregir fin de línea de entrypoint
+RUN sed -i 's/\r$//' /app/StatNode/entrypoint/entrypoint.sh
 
-# Copiar el código fuente
-COPY StatNode/ ./          
-COPY Shared/ /Shared/      
-
-# Configuración de entorno
-ENV PYTHONPATH="/:/StatNode:${PYTHONPATH}"
-ENV FLASK_APP=API.server
+# Variables de entorno
+# Añadimos /app al PYTHONPATH para que encuentre los módulos StatNode y Shared
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+ENV FLASK_APP=StatNode.API.server
 ENV FLASK_ENV=development
 
 EXPOSE 5000
 
-# Ejecutar Flask y main.py juntos
-CMD ["bash", "-c", "python -m flask run --host=0.0.0.0 --port=5000 & python /StatNode/main.py"]
-
+# ENTRYPOINT → usando /bin/sh porque slim NO trae bash
+ENTRYPOINT ["/bin/sh", "/app/StatNode/entrypoint/entrypoint.sh"]

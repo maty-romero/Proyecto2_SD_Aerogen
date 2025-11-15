@@ -1,10 +1,9 @@
 #!/bin/bash
-set -e
 
 mongoimport \
   --db windfarm_db \
   --collection telemetry \
-  --file /dataset.json \
+  --file /docker-entrypoint-initdb.d/dataset.json \
   --mode insert
 
-echo "✓ Dataset importado exitosamente"
+echo "âœ“ Dataset importado exitosamente"

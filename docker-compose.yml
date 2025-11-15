@@ -1,11 +1,16 @@
 services:
-  mongo_auth:
-    image: mongo:latest
-    container_name: mongo_auth
+  emqx:
+    image: emqx/emqx:5.7.2
+    container_name: emqx_windfarm
+    restart: unless-stopped
     ports:
-      - "28000:27017"
+      - "1883:1883"     # MQTT (sin TLS)
+      - "8883:8883"     # MQTT (TLS)
+      - "8083:8083"     # MQTT sobre WebSocket (sin TLS)
+      - "8084:8084"     # MQTT sobre WebSocket (TLS)
+      - "18083:18083"   # Dashboard web
     volumes:
-      - mongo_data_auth:/data/db
+       - ./EMQX/data:/opt/emqx/data
     networks:
       - windfarm_net
 
@@ -29,31 +34,43 @@ services:
     networks:
       - windfarm_net
 
-  emqx:
-    image: emqx/emqx:5.7.2
-    container_name: emqx_windfarm
-    restart: unless-stopped
-    ports:
-      - "1883:1883"     # MQTT (sin TLS)
-      - "8883:8883"     # MQTT (TLS)
-      - "8083:8083"     # MQTT sobre WebSocket (sin TLS)
-      - "8084:8084"     # MQTT sobre WebSocket (TLS)
-      - "18083:18083"   # Dashboard web
-    volumes:
-       - ./EMQX/data:/opt/emqx/data
-    networks:
-      - windfarm_net
-        
+#------------------------------------Nodos Mongo back---------------------------------#        
   mongo_windfarm:
     image: mongo:latest
     container_name: mongo_windfarm
     ports:
       - "27017:27017"
     volumes:
+      - ./mongoFiles:/docker-entrypoint-initdb.d
       - mongo_data:/data/db
     networks:
       - windfarm_net
-      
+
+  mongo_windfarm_replica:
+    image: mongo:latest
+    container_name: mongo_windfarm_replica
+    ports:
+      - "27018:27017" # Puerto diferente en el host
+    volumes:
+      - ./mongoFiles:/docker-entrypoint-initdb.d
+      - mongo_data_replica:/data/db # Volumen de datos separado
+    networks:
+      - windfarm_net
+
+#------------------------------------Nodo Mongo auth---------------------------------#
+
+  mongo_auth:
+    image: mongo:latest
+    container_name: mongo_auth
+    ports:
+      - "28000:27017"
+    volumes:
+      - mongo_data_auth:/data/db
+    networks:
+      - windfarm_net
+
+#------------------------------------Nodos Stats---------------------------------#
+
   statnode:
     build:
       context: .                     # raíz del repo
@@ -64,13 +81,38 @@ services:
       - mongo_windfarm
     environment:
       - MQTT_BROKER_HOST=emqx
-      - MONGO_URI=mongodb://mongo_windfarm:27017
+      - MONGO_URIS=mongodb://mongo_windfarm:27017,mongodb://mongo_windfarm_replica:27017
+      - STATNODE_ROLE=primary # <-- ROL PRIMARIO
+      - FLASK_INTERNAL_PORT=5000
     env_file:
       - ./StatNode/.env
     ports:
       - "5000:5000"
     networks:
       - windfarm_net
+
+#Configuracion de nodo replica. Por el momento, mismo accionar
+  statnode_replica:
+    build:
+      context: .                     # Misma raíz del repo
+      dockerfile: ./StatNode/Dockerfile # Mismo Dockerfile
+    container_name: windfarm_statnode_replica # Nuevo nombre de contenedor
+    depends_on:
+      - emqx
+      - mongo_windfarm
+    environment:
+      - MQTT_BROKER_HOST=emqx
+      - MONGO_URIS=mongodb://mongo_windfarm:27017,mongodb://mongo_windfarm_replica:27017
+      - STATNODE_ROLE=replica # <-- ROL DE RÉPLICA
+      - FLASK_INTERNAL_PORT=5000
+    env_file:
+      - ./StatNode/.env
+    ports:
+      - "5002:5000" # Puerto diferente en el host (5001 está en uso)
+    networks:
+      - windfarm_net
+
+#------------------------------------Nodo simulacion---------------------------------#
 
   simulator:
     build:
@@ -103,6 +145,7 @@ networks:
 volumes:
   mongo_data:
   mongo_data_auth:
+  mongo_data_replica:
 
 
 ### -------------
