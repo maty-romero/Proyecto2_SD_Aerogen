@@ -7,10 +7,10 @@ from bson import json_util
 
 # --- Configuration ---
 NUM_FARMS = 1
-TURBINES_PER_FARM = 25
+TURBINES_PER_FARM = 50
 START_DATE = datetime(2024, 11, 13, tzinfo=timezone.utc)  # Fecha actual con timezone UTC
 END_DATE = START_DATE + timedelta(days=365)  # Solo 1 día de datos para pruebas
-TIME_INTERVAL_MINUTES = 20  # Cada 5 minutos (más datos por hora)
+TIME_INTERVAL_MINUTES = 20  # Cada 20 minutos (más datos por hora)
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset.json")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generator_state.json")
 

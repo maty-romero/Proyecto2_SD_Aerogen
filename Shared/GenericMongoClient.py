@@ -10,8 +10,7 @@ class GenericMongoClient:
     Clase genérica para conectarse a MongoDB usando pymongo.
     Permite operaciones básicas de inserción, consulta y actualización.
     """
-    #def __init__(self, uri: str = "mongodb://localhost:27017", db_name: str = "test_db"):
-    def __init__(self, uri: str = os.environ.get("MONGO_URI", "mongodb://localhost:27017"), db_name: str = os.environ.get("MONGO_DB_NAME", "test_db")):
+    def __init__(self, uri: str, db_name: str):
         self.uri = uri
         self.db_name = db_name
         self.client: MongoClient = None
@@ -83,36 +82,28 @@ class GenericMongoClient:
 
 """
 Ejemplo de uso:
-
+"""
+from datetime import datetime
 
 if __name__ == "__main__":
-    mongo_client = GenericMongoClient(db_name="my_test_db")
+    # Para probar, leer la URI de una variable de entorno o usar un valor por defecto
+    MONGO_URI_TEST = os.environ.get("MONGO_URI_TEST", "mongodb://localhost:27017")
+    DB_NAME_TEST = "my_test_db"
+
+    mongo_client = GenericMongoClient(uri=MONGO_URI_TEST, db_name=DB_NAME_TEST)
     mongo_client.connect()
 
     # Insertar
-    doc_id = mongo_client.insert_one("turbine_data", {"turbine_id": "T-001", "rpm": 1500})
+    doc_id = mongo_client.insert_one("turbine_data", {"turbine_id": "T-001", "rpm": 1500, "timestamp": datetime.utcnow()})
     print(f"Documento insertado con id: {doc_id}")
 
     # Consultar
     docs = mongo_client.find("turbine_data", {"turbine_id": "T-001"})
     print("Documentos encontrados:", docs)
     
-    # Consulta por fecha
-    start_date = datetime(2025, 10, 20) # Fechas ejemplo
-    end_date   = datetime(2025, 10, 25)
-
-    # Consulta por rango de fecha
-    query = {
-        "timestamp": {"$gte": start_date, "$lte": end_date}
-    }
-
-    docs = mongo_client.find("turbine_data", query)
-
     # Actualizar
-    updated = mongo_client.update_one("turbine_data", {"turbine_id": "T-001"}, {"rpm": 1550})
+    updated = mongo_client.update_one("turbine_data", {"_id": doc_id}, {"rpm": 1550})
     print(f"Documentos modificados: {updated}")
 
     # Cerrar
     mongo_client.close()
-
-"""

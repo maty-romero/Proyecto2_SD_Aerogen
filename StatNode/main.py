@@ -1,5 +1,6 @@
 import json
 import time
+import os
 from threading import Lock, Thread
 from typing import Dict, Any
 
@@ -18,17 +19,45 @@ class StatNode:
         self.data_lock = Lock()
         self.publish_interval = 10  # Publicar estadísticas cada 10 segundos
         self._stop_event = False
+        self.db_clients = []
 
-        # Instancia del servicio de base de datos
-        self.db_service = TelemetryDB()
+    def _initialize_db_clients(self):
+        """Inicializa los clientes de base de datos a partir de la variable de entorno MONGO_URIS."""
+        uris_str = os.environ.get("MONGO_URIS")
+        if not uris_str:
+            print("[StatNode] CRÍTICO: La variable de entorno MONGO_URIS no está definida.")
+            return False
+
+        uris = [uri.strip() for uri in uris_str.split(',')]
+        print(f"[StatNode] Se encontraron {len(uris)} URIs de base de datos.")
+
+        for uri in uris:
+            print(f"[StatNode] Inicializando cliente para la BD en {uri}...")
+            # Asumimos que TelemetryDB() intenta conectar en su __init__ y puede fallar
+            try:
+                client = TelemetryDB(uri=uri)
+                # Delegamos la lógica de conexión y reintentos a la propia clase
+                client.connect() 
+                self.db_clients.append(client)
+            except Exception as e:
+                print(f"[StatNode] ADVERTENCIA: No se pudo conectar a la BD en {uri}. Error: {e}")
+
+        if not self.db_clients:
+            return False
+
+        return True
 
     def _message_callback(self, client, userdata, msg):
         """Callback para procesar los mensajes de telemetría de las turbinas."""
         try:
             payload = json.loads(msg.payload.decode())
             
-            # Insertar en la base de datos
-            self.db_service.insert_telemetry(payload)
+            # --- ESCRITURA EN MÚLTIPLES NODOS (MULTI-WRITE) ---
+            for i, db_client in enumerate(self.db_clients):
+                try:
+                    db_client.insert_telemetry(payload)
+                except Exception as e:
+                    print(f"[StatNode] CRÍTICO: Falló la escritura en el nodo de BD {i} ({db_client.uri}): {e}")
 
             turbine_id = payload.get("turbine_id")
             operational_state = payload.get("operational_state")
@@ -60,32 +89,40 @@ class StatNode:
                     states["unknown"] += 1
         return states
 
+    def _execute_read_with_failover(self, read_operation, *args, **kwargs):
+        """
+        Ejecuta una operación de lectura, intentando con cada cliente de BD hasta que una sea exitosa.
+        """
+        for i, client in enumerate(self.db_clients):
+            try:
+                # Llama a la función de lectura (ej. get_metrics_farm) en el cliente actual
+                result = read_operation(client, *args, **kwargs)
+                # Si la lectura es exitosa, la retornamos
+                return result
+            except Exception as e:
+                print(f"[StatNode] ADVERTENCIA: Falló la lectura en el nodo de BD {i} ({client.uri}). Intentando con el siguiente. Error: {e}")
+        
+        print("[StatNode] CRÍTICO: Fallaron las operaciones de lectura en todos los nodos de BD.")
+        return None
+
     def _publish_stats(self):
         """Calcula y publica las estadísticas agregadas del parque eólico."""
         while not self._stop_event:
             time.sleep(self.publish_interval)
-
-            # Asumimos farm_id=1. En un sistema multi-farm, esto debería ser dinámico.
             farm_id = 1
 
-            # 1. Obtener métricas agregadas del farm desde la BD
-            farm_metrics = self.db_service.get_metrics_farm(farm_id=farm_id, minutes=5)
+            # --- LECTURAS CON FAILOVER ---
+            farm_metrics = self._execute_read_with_failover(lambda c, **k: c.get_metrics_farm(**k), farm_id=farm_id, minutes=5)
             if not farm_metrics:
                 print("[StatNode] No hay suficientes datos en la BD para calcular métricas del parque.")
                 continue
 
-            # 2. Obtener producción horaria de las últimas 24h
-            hourly_data = self.db_service.get_hourly_production_last_24h(farm_id=farm_id)
-
-            # 3. Obtener producción diaria de los últimos 7 días
-            daily_data = self.db_service.get_daily_production_last_7_days(farm_id=farm_id)
-
-            # 4. Obtener producción mensual de los últimos 12 meses
-            monthly_data = self.db_service.get_monthly_production_last_12_months(farm_id=farm_id)
-
-            # 5. Obtener promedios horarios de viento y voltaje
-            wind_speed_data = self.db_service.get_hourly_avg_windspeed_last_24h(farm_id=farm_id)
-            voltage_data = self.db_service.get_hourly_avg_voltage_last_24h(farm_id=farm_id)
+            # Las demás lecturas también usarán el mecanismo de failover
+            hourly_data = self._execute_read_with_failover(lambda c, **k: c.get_hourly_production_last_24h(**k), farm_id=farm_id)
+            daily_data = self._execute_read_with_failover(lambda c, **k: c.get_daily_production_last_7_days(**k), farm_id=farm_id)
+            monthly_data = self._execute_read_with_failover(lambda c, **k: c.get_monthly_production_last_12_months(**k), farm_id=farm_id)
+            wind_speed_data = self._execute_read_with_failover(lambda c, **k: c.get_hourly_avg_windspeed_last_24h(**k), farm_id=farm_id)
+            voltage_data = self._execute_read_with_failover(lambda c, **k: c.get_hourly_avg_voltage_last_24h(**k), farm_id=farm_id)
 
             # 6. Obtener conteo de turbinas por estado desde la memoria (más rápido y en tiempo real)
             turbine_counts = self._get_turbine_counts_by_state()
@@ -129,11 +166,25 @@ class StatNode:
     def run(self):
         """Inicia el StatNode."""
         print("--- [StatNode] Iniciando nodo de estadísticas ---")
-        self.mqtt_client.connect() 
+        self.mqtt_client.connect()
+
+        # --- Verificación de Conexión a BD ---
+        if not self._initialize_db_clients():
+            print("[StatNode] CRÍTICO: No se pudo inicializar ninguna conexión a la base de datos.")
+            alert_payload = {
+                "level": "critical",
+                "service": "StatNode",
+                "message": "No se pudo conectar a ninguna base de datos configurada. El servicio no puede operar.",
+                "timestamp": time.time()
+            }
+            self.mqtt_client.publish(ALERTS_TOPIC, alert_payload, qos=1)
+            self.stop()
+            return # Detener la ejecución
+
         self.mqtt_client.subscribe(
             CLEAN_TELEMETRY_TOPIC,
             self._message_callback,
-            qos=0
+            qos=1
         )
         print(f"--- [StatNode] Suscrito a: {CLEAN_TELEMETRY_TOPIC} ---")
 

@@ -11,12 +11,14 @@ DEFAULT_AIR_DENSITY = 1.225  # kg/m^3
 TIMESTAMP_STR_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 class TelemetryDB:
-    def __init__(self, db_name: str = "windfarm_db"): # db_name aquí es un fallback
-        # Creamos una instancia de GenericMongoClient que leerá la variable de entorno MONGO_URI
-        # y se conectará a la base de datos correcta dentro de la red de Docker.
-        self.mongo = GenericMongoClient(db_name=db_name) # GenericMongoClient ahora leerá MONGO_DB_NAME
-        # La conexión se establece explícitamente.
-        self.mongo.connect()
+    def __init__(self, uri: str, db_name: str = "windfarm_db"):
+        """
+        Inicializa el servicio de base de datos para telemetría.
+        La URI de conexión debe ser proporcionada explícitamente.
+        """
+        self.uri = uri
+        self.mongo = GenericMongoClient(uri=self.uri, db_name=db_name)
+        # La conexión no se establece aquí, sino a través del método connect().
 
     def _ensure_numeric_fields(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -122,6 +124,10 @@ class TelemetryDB:
         inserted_id = self.mongo.insert_one(collection_name, payload)
         print(f"--- [TelemetryDB] Insertado _id={inserted_id} - farm_id={payload.get('farm_id')} "
             f"turbine_id={payload.get('turbine_id')} ---\n")
+
+    def connect(self):
+        """Delega la conexión al cliente genérico de MongoDB."""
+        self.mongo.connect()
 
         
     
