@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, jsonify
 from AuthNode.auth_service import AuthService
+from flask_cors import CORS
 
 auth_service = AuthService()
 
@@ -8,11 +9,12 @@ if os.environ.get("CLEAN_DB_ON_STARTUP", "false").lower() in ("1", "true", "yes"
     auth_service.clear_db(drop_collections=True) # Limpiar DB para arranque limpio 
     # Seed roles y usuarios
     auth_service.seed_roles() 
-    turbines_id_list = list(range(1, 51))
+    turbines_id_list = list(range(1, 50))
     farms = [{"farm_id": 1, "turbines": turbines_id_list}]
     auth_service.seed_users(farms=farms, seed_password=os.environ.get("DEFAULT_SEED_PASSWORD", "MiPassComun123"))
 
 app = Flask(__name__)
+CORS(app) # permite todos los orígenes, todos los métodos (solo para dev)
 
 @app.route('/')
 def hello():

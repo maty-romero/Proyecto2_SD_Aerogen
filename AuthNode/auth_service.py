@@ -203,13 +203,13 @@ class AuthService:
         front_node_rules = [
             {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/turbines/+/clean_telemetry"},
             {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/stats"},
-            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+"},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts"},
             {"permission": "deny", "action": "all", "topic_template": "#"}
         ]
         stat_node_rules = [
             {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/turbines/+/clean_telemetry"},
             {"permission": "allow", "action": "publish", "topic_template": "farms/+/stats"},
-            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+"},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts"},
             {"permission": "deny", "action": "all", "topic_template": "#"}
         ]
 

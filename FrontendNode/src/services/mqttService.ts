@@ -25,12 +25,27 @@ import {
  * - windfarm/stats - Estadísticas generales del parque
  */
 
+type ConnectOptions = {
+  clientId?: string;
+  username?: string;       // username MQTT que EMQX espera (ej: WF-1-T-1)
+  authUsername?: string;   // credencial para pedir token al backend
+  authPassword?: string;   // credencial para pedir token al backend (NO es password MQTT)
+  clean?: boolean;
+  reconnectPeriod?: number;
+};
+
+
 export class MqttService {
   private client: MqttClient | null = null;
   private connected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   
+  private jwtToken: string | null = null;
+
+  // Ajustar al endpoint real de tu backend que devuelve { token: "..." }
+  private authEndpoint = 'http://localhost:5001/token'
+
   // Callbacks para manejo de datos
   private onTurbineDataCallback?: (turbineId: string, data: MqttTurbineMessage, metadata?: { name: string; capacity: number }) => void;
   private onAlertCallback?: (alert: MqttAlertMessage) => void;
@@ -38,23 +53,43 @@ export class MqttService {
   private onConnectionChangeCallback?: (connected: boolean) => void;
 
   constructor(
-    private brokerUrl: string = 'ws://localhost:8083/mqtt',
-    private options: {
-      clientId?: string;
-      username?: string;
-      password?: string;
-      clean?: boolean;
-      reconnectPeriod?: number;
-    } = {}
+    private brokerUrl = 'ws://localhost:8083/mqtt',
+    private options: ConnectOptions = {}
   ) {
     this.options = {
-      clientId: `windfarm_client_${Math.random().toString(16).substr(2, 8)}`,
-      username: 'admin',
-      password: 'public',
+      clientId: options.clientId || `client_${Math.random().toString(16).slice(2, 8)}`,
+      username: options.username,
       clean: options.clean !== false,
-      reconnectPeriod: options.reconnectPeriod || 5000,
+      reconnectPeriod: options.reconnectPeriod ?? 5000,
+      authUsername: options.authUsername,
+      authPassword: options.authPassword,
     };
   }
+
+  /** Obtiene token JWT desde el backend. Asume respuesta JSON { token: "..." } */
+  private async fetchToken(): Promise<string> {
+    const authUser = this.options.authUsername;
+    const authPass = this.options.authPassword;
+    if (!authUser || !authPass) throw new Error('No authUsername/authPassword configurados');
+
+    const res = await fetch(this.authEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: authUser, password: authPass }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Auth failed: ${res.status} ${res.statusText} ${txt}`);
+    }
+
+    const json = await res.json();
+    const token = json.token || json.access_token || json.jwt;
+    if (!token) throw new Error('No token received from auth endpoint');
+    this.jwtToken = token;
+    return token;
+  }
+
 
   /**
    * Conecta al broker MQTT
@@ -62,8 +97,18 @@ export class MqttService {
   async connect(): Promise<void> {
     try {
       console.log('Conectando a MQTT broker:', this.brokerUrl);
-      
-      this.client = mqtt.connect(this.brokerUrl, this.options);
+      await this.fetchToken();
+
+      // 2) preparar opciones de conexión para mqtt.connect
+      const connectOpts: any = {
+        clientId: this.options.clientId,
+        username: this.options.username,   // ej: 'WF-1-T-1'
+        password: this.jwtToken,           // JWT -> EMQX lo leerá desde password
+        clean: this.options.clean,
+        reconnectPeriod: this.options.reconnectPeriod,
+      };
+
+      this.client = mqtt.connect(this.brokerUrl, connectOpts);
 
       this.client.on('connect', () => {
         this.connected = true;
@@ -129,19 +174,12 @@ export class MqttService {
   /**
    * Suscribirse a un tópico específico
    */
-  private subscribe(topic: string): void {
-    try {
-      if (!this.client) return;
-      this.client.subscribe(topic, { qos: 1 }, (err) => {
-        if (err) {
-          console.error('Error suscribiendo al tópico:', topic, err);
-        } else {
-          console.log('Suscrito al tópico:', topic);
-        }
-      });
-    } catch (error) {
-      console.error('Error suscribiendo al tópico:', topic, error);
-    }
+  subscribe(topic: string | string[], options?: mqtt.IClientSubscribeOptions) {
+    if (!this.client) throw new Error('Client not connected');
+    this.client.subscribe(topic, options ?? {}, (err, granted) => {
+      if (err) console.error('[MQTT] subscribe error', err);
+      else console.log('[MQTT] subscribe granted', granted);
+    });
   }
 
   /**
@@ -386,15 +424,11 @@ export class MqttService {
   /**
    * Desconecta del broker
    */
-  disconnect(): void {
-    if (this.client) {
-      this.client.end();
-      this.connected = false;
-      if (this.onConnectionChangeCallback) {
-        this.onConnectionChangeCallback(false);
-      }
-      console.log('Desconectado del broker MQTT');
-    }
+  disconnect() {
+    if (!this.client) return;
+    this.client.end(true, () => console.log('[MQTT] disconnected'));
+    this.client = null;
+    this.jwtToken = null;
   }
 
   /**
@@ -468,3 +502,11 @@ export const getMqttService = (
   }
   return mqttServiceInstance;
 };
+
+const mqttService = getMqttService("ws://localhost:8083/mqtt", {
+  clientId: "frontend_node_1",
+  username: "front_node_usr",
+  authUsername: "front_node_usr",
+  authPassword: "MiPassComun123",
+});
+
