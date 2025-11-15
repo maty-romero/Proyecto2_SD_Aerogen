@@ -12,9 +12,11 @@ EMQX/data/**
 #/.env
 
 # Caché de Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyc 
+*.pyo
+*.pyd
 
 # Generated dataset files
 dataset.json

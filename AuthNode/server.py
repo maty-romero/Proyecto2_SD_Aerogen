@@ -2,15 +2,15 @@ import os
 from flask import Flask, request, jsonify
 from AuthNode.auth_service import AuthService
 
-svc = AuthService()
+auth_service = AuthService()
 
 if os.environ.get("CLEAN_DB_ON_STARTUP", "false").lower() in ("1", "true", "yes"):
-    svc.clear_db(drop_collections=True) # Limpiar DB para arranque limpio 
+    auth_service.clear_db(drop_collections=True) # Limpiar DB para arranque limpio 
     # Seed roles y usuarios
-    svc.seed_roles() 
+    auth_service.seed_roles() 
     turbines_id_list = list(range(1, 51))
     farms = [{"farm_id": 1, "turbines": turbines_id_list}]
-    svc.seed_users(farms=farms, seed_password=os.environ.get("DEFAULT_SEED_PASSWORD", "MiPassComun123"))
+    auth_service.seed_users(farms=farms, seed_password=os.environ.get("DEFAULT_SEED_PASSWORD", "MiPassComun123"))
 
 app = Flask(__name__)
 
@@ -24,7 +24,7 @@ def register():
     if not all(k in data for k in ("username", "password")):
         return jsonify({"message": "username and password required"}), 400
     try:
-        svc.create_user(username=data["username"], password=data["password"],
+        auth_service.create_user(username=data["username"], password=data["password"],
                         roles=data.get("roles", []), resources=data.get("resources", []))
         return jsonify({"message": "user created", "username": data["username"]}), 201
     # except DuplicateKeyError:
@@ -46,9 +46,9 @@ def token():
     username = data.get("username"); password = data.get("password")
     if not username or not password:
         return jsonify({"message": "username and password required"}), 400
-    if not svc.authenticate_user(username, password):
+    if not auth_service.authenticate_user(username, password):
         return jsonify({"message": "invalid credentials"}), 401
-    res = svc.issue_jwt_for_user(username)
+    res = auth_service.issue_jwt_for_user(username)
     return jsonify(res), 200
 
 

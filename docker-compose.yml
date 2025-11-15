@@ -1,16 +1,11 @@
 services:
-  emqx:
-    image: emqx/emqx:5.7.2
-    container_name: emqx_windfarm
-    restart: unless-stopped
+  mongo_auth:
+    image: mongo:latest
+    container_name: mongo_auth
     ports:
-      - "1883:1883"     # MQTT (sin TLS)
-      - "8883:8883"     # MQTT (TLS)
-      - "8083:8083"     # MQTT sobre WebSocket (sin TLS)
-      - "8084:8084"     # MQTT sobre WebSocket (TLS)
-      - "18083:18083"   # Dashboard web
+      - "28000:27017"
     volumes:
-       - ./EMQX/data:/opt/emqx/data
+      - mongo_data_auth:/data/db
     networks:
       - windfarm_net
 
@@ -33,6 +28,21 @@ services:
       - mongo_auth
     networks:
       - windfarm_net
+
+  emqx:
+    image: emqx/emqx:5.7.2
+    container_name: emqx_windfarm
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT (sin TLS)
+      - "8883:8883"     # MQTT (TLS)
+      - "8083:8083"     # MQTT sobre WebSocket (sin TLS)
+      - "8084:8084"     # MQTT sobre WebSocket (TLS)
+      - "18083:18083"   # Dashboard web
+    volumes:
+       - ./EMQX/data:/opt/emqx/data
+    networks:
+      - windfarm_net
         
   mongo_windfarm:
     image: mongo:latest
@@ -41,16 +51,6 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-    networks:
-      - windfarm_net
-
-  mongo_auth:
-    image: mongo:latest
-    container_name: mongo_auth
-    ports:
-      - "28000:27017"
-    volumes:
-      - mongo_data_auth:/data/db
     networks:
       - windfarm_net
       

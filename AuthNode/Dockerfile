@@ -13,8 +13,12 @@ COPY Shared/ /Shared/
 
 ENV PYTHONPATH="/:/AuthNode:${PYTHONPATH}"
 ENV FLASK_APP=server
-ENV FLASK_ENV=development
+
 
 EXPOSE 5001
 
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5001"]
+# manejar multiples requests sin necesidad de usar ServidorHTTP
+CMD ["gunicorn", "-w", "8", "-b", "0.0.0.0:5001", "server:app"] 
+
+# ENV FLASK_ENV=development
+# CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5001"]

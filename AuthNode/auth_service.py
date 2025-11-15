@@ -196,20 +196,21 @@ class AuthService:
 
     def seed_roles(self):
         wind_turbine_rules = [
-            {"permission": "allow", "action": "publish", "topic_template": "farm/{farm_id}/turbine/{turbine_id}/raw_telemetry", "sort_order": 10},
-            {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 20}
+            {"permission": "allow", "action": "publish", "topic_template": "farms/{farm_id}/turbines/{turbine_id}/raw_telemetry"},
+            {"permission": "allow", "action": "publish", "topic_template": "farms/{farm_id}/turbines/{turbine_id}/status"},
+            {"permission": "deny", "action": "all", "topic_template": "#"}
         ]
         front_node_rules = [
-            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/turbine/+/clean_telemetry", "sort_order": 10},
-            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/stats", "sort_order": 20},
-            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+", "sort_order": 30},
-            {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 1000}
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/turbines/+/clean_telemetry"},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/stats"},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+"},
+            {"permission": "deny", "action": "all", "topic_template": "#"}
         ]
         stat_node_rules = [
-            {"permission": "allow", "action": "subscribe", "topic_template": "farm/+/turbine/+/clean_telemetry", "sort_order": 10},
-            {"permission": "allow", "action": "publish", "topic_template": "farm/+/stats", "sort_order": 20},
-            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+", "sort_order": 30},
-            {"permission": "deny", "action": "all", "topic_template": "#", "sort_order": 1000}
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/turbines/+/clean_telemetry"},
+            {"permission": "allow", "action": "publish", "topic_template": "farms/+/stats"},
+            {"permission": "allow", "action": "subscribe", "topic_template": "farms/+/alerts/turbines/+"},
+            {"permission": "deny", "action": "all", "topic_template": "#"}
         ]
 
         self.create_or_update_role("wind_turbine", wind_turbine_rules)
@@ -240,7 +241,7 @@ class AuthService:
                     skipped.append(f"{username}: {str(e)}")
 
         # usuarios globales
-        for uname, role in [("front_node_usr", "front_node"), ("stat_node_usr", "stat_node")]:
+        for uname, role in [("front_node_usr", "front_node"), ("stat_node_client", "stat_node")]:
             try:
                 self.create_user(username=uname, password=pwd, roles=[role], resources=[])
                 created.append(uname)

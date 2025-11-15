@@ -2,3 +2,5 @@ paho-mqtt
 Flask
 pymongo
 python-dotenv
+requests
+PyJWT

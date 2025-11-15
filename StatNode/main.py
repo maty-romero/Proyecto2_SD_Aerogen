@@ -4,6 +4,7 @@ from threading import Lock, Thread
 from typing import Dict, Any
 
 from Shared.GenericMQTTClient import GenericMQTTClient
+from Shared.TokenProvider import TokenProvider
 from StatNode.DB.TelemetryDB import TelemetryDB
 
 CLEAN_TELEMETRY_TOPIC = "farms/{farm_id}/turbines/+/clean_telemetry".format(farm_id=1)
@@ -13,7 +14,9 @@ ALERTS_TOPIC = "farms/{farm_id}/alerts".format(farm_id=1)
 class StatNode:
     # El StatNode ahora es agnóstico al farm_id, pero lo usará para las consultas. Asumimos farm_id=1 por defecto.
     def __init__(self, client_id: str = "stat_node_client"):
-        self.mqtt_client = GenericMQTTClient(client_id=client_id)
+        self.mqtt_client = GenericMQTTClient(client_id=client_id, token_provider=TokenProvider()) 
+        self.mqtt_client.set_auth_credentials(username=client_id, password="MiPassComun123")
+        
         self.turbines_data = {}
         self.data_lock = Lock()
         self.publish_interval = 10  # Publicar estadísticas cada 10 segundos

@@ -1,7 +1,10 @@
 import json
 import time
+from typing import Optional
 import paho.mqtt.client as mqtt
 import os
+
+from Shared.TokenProvider import TokenProvider
 
 # -- Constantes configuracion
 # Si corremos en Docker, usamos el nombre del servicio. Si no, localhost.
@@ -15,14 +18,21 @@ class GenericMQTTClient:
     NO contiene nada específico de turbinas ni payloads.
     Métodos: connect, disconnect, publish, set_lwt, clear_retained.
     """
-    def __init__(self, client_id: str = None, broker_host: str = BROKER_HOST, broker_port: int = BROKER_PORT):
+    def __init__(self, client_id: str = None, broker_host: str = BROKER_HOST, broker_port: int = BROKER_PORT, token_provider: TokenProvider = None):
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
         self.broker_host = broker_host
         self.broker_port = broker_port
-        self._client_id = client_id or ""
-        # callbacks básicos opcionales (solo logging)
+        self._client_id = client_id or ""    
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
+        # Config Autenticacion 
+        self.token_provider = token_provider
+        self._auth_username: Optional[str] = None
+        self._auth_password: Optional[str] = None
+
+    def set_auth_credentials(self, username: str, password: str):
+        self._auth_username = username
+        self._auth_password = password
 
     def _on_connect(self, client, userdata, flags, rc, properties=None):
         print(f"[MQTT:{self._client_id}] connected rc={rc}")
@@ -40,6 +50,15 @@ class GenericMQTTClient:
         self.client.will_set(topic, payload=payload, qos=qos, retain=retain)
 
     def connect(self, keepalive: int = 60, max_retries: int = 5, retry_delay_s: int = 3):
+        # si existe token_provider y credenciales, obtener token JWT y se usa como password
+        if self.token_provider and self._auth_username and self._auth_password:
+            try:
+                token = self.token_provider.get_token(self._auth_username, self._auth_password)
+                self.client.username_pw_set(username=self._auth_username, password=token)
+                print(f"[MQTT:{self._client_id}] Using JWT for username='{self._auth_username}'")
+            except Exception as e:
+                print(f"[MQTT:{self._client_id}] Failed to obtain token: {e}")
+        
         """
         Conecta y arranca el loop, con reintentos en caso de fallo inicial.
         Asume que set_lwt() (si se necesita) fue llamado antes.
@@ -50,12 +69,13 @@ class GenericMQTTClient:
                 print(f"[MQTT:{self._client_id}] connecting to {self.broker_host}:{self.broker_port} ... (Attempt {retries + 1})")
                 self.client.connect(self.broker_host, self.broker_port, keepalive=keepalive)
                 self.client.loop_start()
-                return  # Conexión exitosa
+                return
             except ConnectionRefusedError as e:
                 print(f"[MQTT:{self._client_id}] Connection refused. Retrying in {retry_delay_s}s...")
                 retries += 1
                 time.sleep(retry_delay_s)
-        raise ConnectionRefusedError(f"Failed to connect to MQTT broker after {max_retries} attempts.")
+        raise ConnectionRefusedError(f"Failed to  connect to MQTTbroker after {max_retries} attempts.")
+
 
     def publish(self, topic: str, payload, qos: int = 0, retain: bool = False):
         """

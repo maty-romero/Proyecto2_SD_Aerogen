@@ -4,6 +4,7 @@ import threading
 import time
 
 from Shared.GenericMQTTClient import GenericMQTTClient
+from Shared.TokenProvider import TokenProvider
 
 TOPIC_RAW_TELEMETRY = "farms/{farm_id}/turbines/{turbine_id}/raw_telemetry"  
 TOPIC_STATUS = "farms/{farm_id}/turbines/{turbine_id}/status"
@@ -17,9 +18,12 @@ class WindTurbine:
         self.status_topic = TOPIC_STATUS.format(farm_id=farm_id, turbine_id=turbine_id)
         
         # cliente mqtt con id unico
-        str_turbine_id = f"WF-{farm_id}-T-{turbine_id}" 
+        str_turbine_id = f"WF-{farm_id}-T-{turbine_id}" # WF-1-T-1
         
-        self.mqtt_client = GenericMQTTClient(client_id=str_turbine_id) 
+        # Credenciales para autenticacion MQTT
+        self.mqtt_client = GenericMQTTClient(client_id=str_turbine_id, token_provider=TokenProvider()) 
+        self.mqtt_client.set_auth_credentials(username=str_turbine_id, password="MiPassComun123")
+        
         self.publish_interval = 10
         self._stop_event = threading.Event()
         self._thread = None
