@@ -5,12 +5,13 @@ authentication = [
     enable = true
     from = password
     mechanism = jwt
-    secret = testing_secret_key
+    secret = "testing_secret_key"
     secret_base64_encoded = false
     use_jwks = false
-    verify_claims {}
+    verify_claims = {}
   }
 ]
+
 authorization {
   cache {
     enable = true
@@ -28,15 +29,17 @@ authorization {
     }
   ]
 }
+
 rule_engine {
   ignore_sys_message = true
   jq_function_default_timeout = "10s"
+  
   rules {
     rule_bearing_temperature {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -48,26 +51,32 @@ rule_engine {
       ]
       description = "Genera una alerta crítica si la temperatura de los rodamientos supera los 90°C."
       enable = true
-      metadata {created_at = 1762296497770}
+      metadata {
+        created_at = 1762296497770
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
           payload.farm_name AS farm_name,
           payload.turbine_name AS turbine_name,
           payload.bearing_temperature_c AS bearing_temperature_c,
-          'mechanical' AS alert_type, payload.timestamp AS timestamp, 'critical' AS severity,
+          'mechanical' AS alert_type,
+          payload.timestamp AS timestamp,
+          'critical' AS severity,
           'Bearing temperature in critical levels' AS message
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE payload.operational_state = 'operational'
-          AND payload.bearing_temperature_c > 90~"""
+          AND payload.bearing_temperature_c > 90
+      """
     }
+    
     rule_gear_temperature {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -79,9 +88,11 @@ rule_engine {
       ]
       description = "Genera una alerta crítica si la temperatura de la caja de engranajes supera los 100°C."
       enable = true
-      metadata {created_at = 1762295635867}
+      metadata {
+        created_at = 1762295635867
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -94,13 +105,15 @@ rule_engine {
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE payload.operational_state = 'operational'
-          AND payload.gear_temperature_c > 100~"""
+          AND payload.gear_temperature_c > 100
+      """
     }
+    
     rule_high_vibrations {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -112,9 +125,11 @@ rule_engine {
       ]
       description = "Genera una alerta de advertencia si los niveles de vibración superan 4.5 mm/s."
       enable = true
-      metadata {created_at = 1762531000000}
+      metadata {
+        created_at = 1762531000000
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -127,13 +142,15 @@ rule_engine {
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE payload.operational_state = 'operational'
-          AND payload.vibrations_mms > 4.5~"""
+          AND payload.vibrations_mms > 4.5
+      """
     }
+    
     rule_low_power_factor {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -145,9 +162,11 @@ rule_engine {
       ]
       description = "Genera una alerta si el factor de potencia es bajo mientras la turbina está generando energía."
       enable = true
-      metadata {created_at = 1762532000002}
+      metadata {
+        created_at = 1762532000002
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -156,17 +175,24 @@ rule_engine {
           'electrical' AS alert_type,
           'warning' AS severity,
           'Anomalous power factor detected.' AS message,
-          payload.timestamp AS timestamp
+          payload.timestamp AS timestamp,
+          payload.active_power_kw AS active_power_kw,
+          payload.reactive_power_kvar AS reactive_power_kvar
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE
           payload.active_power_kw > 100
-          AND (payload.active_power_kw / sqrt(pow(payload.active_power_kw, 2) + pow(payload.reactive_power_kvar, 2))) < 0.9~"""
+          AND (
+            payload.reactive_power_kvar > (payload.active_power_kw * 0.484)
+            OR payload.reactive_power_kvar < (payload.active_power_kw * -0.484)
+          )
+      """
     }
+    
     rule_low_production_high_wind {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -178,9 +204,11 @@ rule_engine {
       ]
       description = "Genera una alerta si la turbina está operativa con viento fuerte pero no genera suficiente energía."
       enable = true
-      metadata {created_at = 1762532000000}
+      metadata {
+        created_at = 1762532000000
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -194,13 +222,15 @@ rule_engine {
         WHERE
           payload.operational_state = 'operational'
           AND payload.wind_speed_mps > 8
-          AND payload.active_power_kw < 50~"""
+          AND payload.active_power_kw < 50
+      """
     }
+    
     rule_noisy_telemetry {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -212,9 +242,11 @@ rule_engine {
       ]
       description = "Filtra la telemetría ruidosa o inválida y re-publica los datos limpios en un tópico 'clean'."
       enable = true
-      metadata {created_at = 1762530126559}
+      metadata {
+        created_at = 1762530126559
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id                     AS farm_id,
           payload.farm_name                    AS farm_name,
@@ -244,13 +276,14 @@ rule_engine {
           AND payload.wind_speed_mps >= 0 AND payload.wind_speed_mps <= 60
           AND payload.rotor_speed_rpm >= 0 AND payload.rotor_speed_rpm <= 2000
           AND payload.bearing_temperature_c >= -10 AND payload.bearing_temperature_c <= 100
-      ~"""
+      """
     }
+    
     rule_operational_fault {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -262,9 +295,11 @@ rule_engine {
       ]
       description = "Genera una alerta crítica si la turbina reporta explícitamente un estado de 'fault'."
       enable = true
-      metadata {created_at = 1762531000002}
+      metadata {
+        created_at = 1762531000002
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -276,13 +311,15 @@ rule_engine {
           'Turbine has reported a fault state' AS message,
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.operational_state = 'fault'~"""
+        WHERE payload.operational_state = 'fault'
+      """
     }
+    
     rule_rotor_overspeed {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -294,9 +331,11 @@ rule_engine {
       ]
       description = "Genera una alerta crítica si la velocidad del rotor supera las 35 RPM."
       enable = true
-      metadata {created_at = 1762531000001}
+      metadata {
+        created_at = 1762531000001
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -309,13 +348,15 @@ rule_engine {
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
         WHERE payload.operational_state = 'operational'
-          AND payload.rotor_speed_rpm > 35~"""
+          AND payload.rotor_speed_rpm > 35
+      """
     }
+    
     rule_turbine_maintenance {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -327,9 +368,11 @@ rule_engine {
       ]
       description = "Genera una alerta informativa cuando una turbina entra en estado de mantenimiento."
       enable = true
-      metadata {created_at = 1762534000000}
+      metadata {
+        created_at = 1762534000000
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -340,13 +383,15 @@ rule_engine {
           'Turbine has entered maintenance state.' AS message,
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.operational_state = 'maintenance'~"""
+        WHERE payload.operational_state = 'maintenance'
+      """
     }
+    
     rule_turbine_offline {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -358,9 +403,11 @@ rule_engine {
       ]
       description = "Genera una alerta cuando una turbina se desconecta (basado en LWT)."
       enable = true
-      metadata {created_at = 1762532000001}
+      metadata {
+        created_at = 1762532000001
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -371,13 +418,15 @@ rule_engine {
           'Turbine has gone offline. Communication lost.' AS message,
           now_rfc3339() AS timestamp
         FROM "farms/+/turbines/+/status"
-        WHERE payload.state = 'offline'~"""
+        WHERE payload.state = 'offline'
+      """
     }
+    
     rule_turbine_standby {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -389,9 +438,11 @@ rule_engine {
       ]
       description = "Genera una alerta informativa cuando una turbina entra en estado de espera (standby)."
       enable = true
-      metadata {created_at = 1762535000000}
+      metadata {
+        created_at = 1762535000000
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -402,13 +453,15 @@ rule_engine {
           'Turbine has entered standby mode.' AS message,
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.operational_state = 'standby'~"""
+        WHERE payload.operational_state = 'standby'
+      """
     }
+    
     rule_turbine_stopped {
       actions = [
         {
           args {
-            mqtt_properties {}
+            mqtt_properties = {}
             payload = ""
             qos = 1
             retain = false
@@ -420,9 +473,11 @@ rule_engine {
       ]
       description = "Genera una alerta informativa cuando una turbina entra en estado detenido."
       enable = true
-      metadata {created_at = 1762534000001}
+      metadata {
+        created_at = 1762534000001
+      }
       name = ""
-      sql = """~
+      sql = """
         SELECT
           payload.farm_id AS farm_id,
           payload.turbine_id AS turbine_id,
@@ -433,10 +488,14 @@ rule_engine {
           'Turbine has been stopped.' AS message,
           payload.timestamp AS timestamp
         FROM "farms/+/turbines/+/raw_telemetry"
-        WHERE payload.operational_state = 'stopped'~"""
+        WHERE payload.operational_state = 'stopped'
+      """
     }
   }
 }
+
 topic_metrics = [
-  {topic = "farms/1/stats"}
+  {
+    topic = "farms/1/stats"
+  }
 ]
