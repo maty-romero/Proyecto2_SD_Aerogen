@@ -1,41 +1,39 @@
-from flask import Flask, request, jsonify, g
-from StatNode.Auth.verify_key import *
+from flask import Flask
+from flask_restx import Api
+import sys
+import os
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__)
 
-@app.route('/')
-def hello_geek():
-    return '<h1>Hello from Flask & Docker</h2>'
+authorizations = {
+    'apikey': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'x-api-key',
+        'description': 'API Key en formato: kid.raw_key'
+    }
+}
 
-# Endpoint Testing protegido con API Key para obtener alertas 
-"""
-Para probar en Postman:
-1. Crear una nueva request GET a http://localhost:5000/protected
-2. En la pestaña Headers, añadir un header -> Authorization > Auth Type API Key:
-   Key: x-api-key
-   Value: RAW_API_KEY_GENERADA --> Ver Docs 
-   Add to: Header
-"""
-@app.route("/protected", methods=['GET'])
-@require_api_key()
-def get_alerts():
-    # ejemplo: retornar alerts ficticias
-    return jsonify({"message": "You have accessed a protected endpoint!",
-        "alerts": [
-            {"id": 1, "message": "High wind speed detected", "turbine": "T-001"},
-            {"id": 2, "message": "Temperature threshold exceeded", "turbine": "T-002"}
-        ]
-    })
+api = Api(
+    app,
+    version='5.0',
+    title='WindFarm StatNode API',
+    description='API REST para consultar datos del parque eólico',
+    doc='/api-docs',
+    prefix='/api/v5',
+    authorizations=authorizations,
+    security='apikey',
+    mask=False,
+    mask_swagger=False
+)
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """
-    Endpoint simple para verificar que el servicio está vivo.
-    """
-    return jsonify({"status": "ok"}), 200
+# from StatNode.API.routes import farms, turbines, alerts, general
+from StatNode.API.routes import farms, turbines, general
 
-if __name__ == '__main__':
-    # Ejecuta en el puerto 5000 por defecto
-    app.run()
+# Inicializar clientes de base de datos
+from StatNode.API.utils.db_instance import init_db_clients
+init_db_clients()
 
+# Las rutas se registran automáticamente al importarse gracias a los decoradores @farms_ns.route()

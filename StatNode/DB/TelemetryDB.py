@@ -129,6 +129,67 @@ class TelemetryDB:
         """Delega la conexión al cliente genérico de MongoDB."""
         self.mongo.connect()
 
+    def get_turbine_telemetry_by_date_range(
+        self, 
+        turbine_id: int, 
+        from_date: str, 
+        to_date: str, 
+        limit: int = 1000
+    ) -> List[Dict[str, Any]]:
+        """
+        Obtiene telemetría de una turbina específica entre dos fechas.
+        
+        Args:
+            turbine_id: ID de la turbina
+            from_date: Fecha inicio en formato ISO 8601 (ej: "2025-11-08T00:00:00Z")
+            to_date: Fecha fin en formato ISO 8601 (ej: "2025-11-16T23:59:59Z")
+            limit: Número máximo de registros a devolver (default: 1000)
+            
+        Returns:
+            Lista de documentos de telemetría ordenados por timestamp descendente
+        """
+        try:
+            # Parsear fechas ISO 8601 a datetime UTC
+            from_dt = datetime.fromisoformat(from_date.replace('Z', '+00:00'))
+            to_dt = datetime.fromisoformat(to_date.replace('Z', '+00:00'))
+            
+            # Convertir a UTC si no lo son
+            if from_dt.tzinfo is None:
+                from_dt = from_dt.replace(tzinfo=timezone.utc)
+            else:
+                from_dt = from_dt.astimezone(timezone.utc)
+                
+            if to_dt.tzinfo is None:
+                to_dt = to_dt.replace(tzinfo=timezone.utc)
+            else:
+                to_dt = to_dt.astimezone(timezone.utc)
+            
+            # Construir query MongoDB
+            query = {
+                "turbine_id": turbine_id,
+                "timestamp": {
+                    "$gte": from_dt,
+                    "$lte": to_dt
+                }
+            }
+            
+            # Usar el método find de GenericMongoClient
+            collection = self.mongo.get_collection("telemetry")
+            cursor = collection.find(query).sort("timestamp", -1).limit(limit)
+            results = list(cursor)
+            
+            # Convertir ObjectId y datetime a strings para serialización JSON
+            for doc in results:
+                if "_id" in doc:
+                    doc["_id"] = str(doc["_id"])
+                if "timestamp" in doc and isinstance(doc["timestamp"], datetime):
+                    doc["timestamp"] = doc["timestamp"].isoformat()
+            
+            return results
+            
+        except Exception as e:
+            print(f"[TelemetryDB] Error al consultar telemetría: {e}")
+            return []
         
     
     @staticmethod
