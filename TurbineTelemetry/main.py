@@ -3,7 +3,7 @@ import time
 from TurbineTelemetry.WindTurbine import WindTurbine
 
 if __name__ == "__main__":
-    NUM_TURBINES = 25
+    NUM_TURBINES = 15
     turbines = []
 
     print(f"--- Creando {NUM_TURBINES} turbinas de simulación ---")

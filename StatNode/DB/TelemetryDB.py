@@ -122,8 +122,35 @@ class TelemetryDB:
                 pass
 
         inserted_id = self.mongo.insert_one(collection_name, payload)
-        print(f"--- [TelemetryDB] Insertado _id={inserted_id} - farm_id={payload.get('farm_id')} "
+        print(f"--- [TelemetryDB - Telemetry] Insertado _id={inserted_id} - farm_id={payload.get('farm_id')} "
             f"turbine_id={payload.get('turbine_id')} ---\n")
+
+    def insert_alerts(self, payload: Dict[str, Any]):
+        print("****** Alerta recibida a insertar ******\n")
+        print(payload)
+        print("******************************\n")
+        
+        collection_name = "alerts"
+
+        # normalizar timestamp y campos numericos
+        payload = self._ensure_timestamp(payload)
+        payload = self._ensure_numeric_fields(payload)
+
+        # forzar farm/turbine a int si es posible
+        if "farm_id" in payload:
+            try:
+                payload["farm_id"] = int(payload["farm_id"])
+            except Exception:
+                pass
+        if "turbine_id" in payload:
+            try:
+                payload["turbine_id"] = int(payload["turbine_id"])
+            except Exception:
+                pass
+
+        inserted_id = self.mongo.insert_one(collection_name, payload)
+        print(f"--- [TelemetryDB - Alerts] Insertado _id={inserted_id} - farm_id={payload.get('farm_id')} | Alerts")
+
 
     def connect(self):
         """Delega la conexión al cliente genérico de MongoDB."""

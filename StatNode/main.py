@@ -55,27 +55,43 @@ class StatNode:
 
 
     def _message_callback(self, client, userdata, msg):
-        """Callback para procesar los mensajes de telemetría de las turbinas."""
+        """Callback para procesar mensajes que pueden ser telemetría o alertas,
+        sin contemplar mensajes envueltos bajo 'payload'.
+        """
         try:
             payload = json.loads(msg.payload.decode())
-            
-            # --- ESCRITURA EN MÚLTIPLES NODOS (MULTI-WRITE) ---
+        except Exception as e:
+            print(f"[StatNode] Error procesando mensaje (JSON inválido): {e}")
+            return
+
+        # --- CASO 1: ALERTA ---
+        if payload.get("alert_type") is not None:
+            print(f"[StatNode] ALERTA recibida (topic={msg.topic}): {payload}")
+
             for i, db_client in enumerate(self.db_clients):
                 try:
-                    db_client.insert_telemetry(payload)
+                    db_client.insert_alerts(payload)
                 except Exception as e:
-                    print(f"[StatNode] CRÍTICO: Falló la escritura en el nodo de BD {i} ({db_client.uri}): {e}")
+                    print(f"[StatNode] CRÍTICO: Falló la escritura de ALERTA en nodo BD {i} ({db_client.uri}): {e}")
 
-            turbine_id = payload.get("turbine_id")
-            operational_state = payload.get("operational_state")
+            return  # No seguimos a lógica de telemetría
 
-            if turbine_id is not None:
+        # --- CASO 2: TELEMETRIA ---
+        for i, db_client in enumerate(self.db_clients):
+            try:
+                db_client.insert_telemetry(payload)
+            except Exception as e:
+                print(f"[StatNode] CRÍTICO: Falló la escritura de TELEMETRÍA en nodo BD {i} ({db_client.uri}): {e}")
+
+        # Actualizar cache de estado en memoria
+        turbine_id = payload.get("turbine_id")
+        if turbine_id is not None:
+            try:
                 with self.data_lock:
-                    # Guardamos los datos más recientes en memoria para tener un conteo rápido de turbinas
                     self.turbines_data[turbine_id] = payload
+            except Exception as e:
+                print(f"[StatNode] Error actualizando turbines_data: {e}")
 
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"[StatNode] Error procesando mensaje: {e}")
 
     def _get_turbine_counts_by_state(self) -> Dict[str, int]:
         """Cuenta las turbinas por estado operacional a partir de los datos en memoria."""
@@ -193,7 +209,13 @@ class StatNode:
             self._message_callback,
             qos=1
         )
+        self.mqtt_client.subscribe(
+            ALERTS_TOPIC,
+            self._message_callback,
+            qos=1
+        )
         print(f"--- [StatNode] Suscrito a: {CLEAN_TELEMETRY_TOPIC} ---")
+        print(f"--- [StatNode] Suscrito a: {ALERTS_TOPIC} ---")
 
         # Iniciar el hilo para publicar estadísticas
         stats_thread = Thread(target=self._publish_stats, daemon=True)
