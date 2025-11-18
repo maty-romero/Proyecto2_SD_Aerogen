@@ -3,23 +3,28 @@ Cliente HTTP para consultar la API REST de EMQX Broker.
 Documentación: https://www.emqx.io/docs/en/v5.0/admin/api.html
 """
 import os
+import sys
 import requests
 from typing import List, Dict, Optional
 from requests.auth import HTTPBasicAuth
+
+# Importar TokenProvider
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from Shared.TokenProvider import TokenProvider
 
 
 class EMQXClient:
     """Cliente para interactuar con la API REST de EMQX."""
     
-    def __init__(self):
+    def __init__(self, token_provider: Optional[TokenProvider] = None):
         self.base_url = os.getenv('EMQX_API_URL', 'http://emqx:18083')
         self.api_user = os.getenv('EMQX_API_USER', 'admin')
-        self.api_password = os.getenv('EMQX_API_PASSWORD', 'public')
         self.timeout = 5  # segundos
     
     def _get_auth(self):
-        """Obtiene las credenciales de autenticación para EMQX REST API."""
-        return HTTPBasicAuth(self.api_user, self.api_password)
+        """Autenticación básica usando credenciales estáticas."""
+        api_password = os.getenv('EMQX_API_PASSWORD', 'public')
+        return HTTPBasicAuth(self.api_user, api_password)
     
     def get_clients(self) -> Optional[List[Dict]]:
         """
