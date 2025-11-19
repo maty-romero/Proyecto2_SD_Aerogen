@@ -7,7 +7,7 @@ from typing import Dict, Any
 from Shared.GenericMQTTClient import GenericMQTTClient
 from Shared.TokenProvider import TokenProvider
 from StatNode.DB.TelemetryDB import TelemetryDB
-from StatNode.API.utils.emqx_client import init_emqx_client_with_token
+
 
 CLEAN_TELEMETRY_TOPIC = "farms/{farm_id}/turbines/+/clean_telemetry".format(farm_id=1)
 STATS_TOPIC = "farms/{farm_id}/stats".format(farm_id=1)
@@ -21,9 +21,6 @@ class StatNode:
         # Configurar MQTT client con JWT
         self.mqtt_client = GenericMQTTClient(client_id=client_id, token_provider=self.token_provider) 
         self.mqtt_client.set_auth_credentials(username=client_id, password="MiPassComun123")
-        
-        # Inicializar EMQX REST client con TokenProvider para JWT
-        init_emqx_client_with_token(self.token_provider)
         
         self.turbines_data = {}
         self.data_lock = Lock()

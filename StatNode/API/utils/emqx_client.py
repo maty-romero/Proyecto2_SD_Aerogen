@@ -36,9 +36,16 @@ class EMQXClient:
         try:
             url = f"{self.base_url}/api/v5/clients"
             response = requests.get(url, auth=self._get_auth(), timeout=self.timeout)
-            response.raise_for_status()
             
+            print(f"[EMQX_DEBUG] Status Code: {response.status_code}")
+            if response.status_code != 200:
+                print(f"[EMQX_DEBUG] Error respuesta: {response.text}")
+                return None
+            
+            response.raise_for_status()
+
             data = response.json()
+
             return data.get('data', [])
         except requests.exceptions.RequestException as e:
             print(f"Error al obtener clientes de EMQX: {e}")

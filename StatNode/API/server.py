@@ -19,8 +19,8 @@ authorizations = {
 api = Api(
     app,
     version='5.0',
-    title='WindFarm StatNode API',
-    description='API REST para consultar datos del parque eólico',
+    title='WindFarm API',
+    description='API para consultar datos del parque eólico',
     doc='/api-docs',
     prefix='/api/v5',
     authorizations=authorizations,
@@ -29,8 +29,7 @@ api = Api(
     mask_swagger=False
 )
 
-# from StatNode.API.routes import farms, turbines, alerts, general
-from StatNode.API.routes import farms, turbines, general
+from StatNode.API.routes import farms, turbines, alerts, general
 
 # Inicializar clientes de base de datos
 from StatNode.API.utils.db_instance import init_db_clients

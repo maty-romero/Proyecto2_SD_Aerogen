@@ -10,7 +10,7 @@ from Shared.GenericMongoClient import GenericMongoClient
 DEFAULT_AIR_DENSITY = 1.225  # kg/m^3
 TIMESTAMP_STR_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-class TelemetryDB:
+class TelemetryDB:            
     def __init__(self, uri: str, db_name: str = "windfarm_db"):
         """
         Inicializa el servicio de base de datos para telemetría.
@@ -156,6 +156,83 @@ class TelemetryDB:
         """Delega la conexión al cliente genérico de MongoDB."""
         self.mongo.connect()
 
+
+    def get_alerts_by_farm_and_turbine(self, farm_id: int, turbine_id: int, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Devuelve las alertas de una turbina específica dentro de un farm.
+        Args:
+            farm_id: ID del farm
+            turbine_id: ID de la turbina
+            limit: Máximo número de alertas a devolver (default: 100)
+        Returns:
+            Lista de alertas ordenadas por timestamp descendente
+        """
+        try:
+            collection = self.mongo.get_collection("alerts")
+            query = {"farm_id": farm_id, "turbine_id": turbine_id}
+            cursor = collection.find(query).sort("timestamp", -1).limit(limit)
+            results = list(cursor)
+            
+            for doc in results:
+                if "_id" in doc:
+                    doc["_id"] = str(doc["_id"])
+                if "timestamp" in doc and isinstance(doc["timestamp"], datetime):
+                    doc["timestamp"] = doc["timestamp"].isoformat()
+            return results
+        except Exception as e:
+            print(f"[TelemetryDB] Error al consultar alertas por farm y turbina: {e}")
+            return []
+
+
+    def get_alerts_by_farm_and_severity(self, farm_id: int, severity: str, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Devuelve las alertas de un farm por severidad.
+        Args:
+            farm_id: ID del farm
+            severity: severidad de la alerta
+            limit: Máximo número de alertas a devolver
+        Returns:
+            Lista de alertas ordenadas por timestamp descendente
+        """
+        try:
+            collection = self.mongo.get_collection("alerts")
+            query = {"farm_id": farm_id, "severity": severity}
+            cursor = collection.find(query).sort("timestamp", -1).limit(limit)
+            results = list(cursor)
+            for doc in results:
+                if "_id" in doc:
+                    doc["_id"] = str(doc["_id"])
+                if "timestamp" in doc and isinstance(doc["timestamp"], datetime):
+                    doc["timestamp"] = doc["timestamp"].isoformat()
+            return results
+        except Exception as e:
+            print(f"[TelemetryDB] Error al consultar alertas por farm y severidad: {e}")
+            return []
+
+    def get_alerts_by_farm(self, farm_id: int, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Devuelve todas las alertas de un farm.
+        Args:
+            farm_id: ID del farm
+            limit: Máximo número de alertas a devolver
+        Returns:
+            Lista de alertas ordenadas por timestamp
+        """
+        try:
+            collection = self.mongo.get_collection("alerts")
+            query = {"farm_id": farm_id}
+            cursor = collection.find(query).sort("timestamp", -1).limit(limit)
+            results = list(cursor)
+            for doc in results:
+                if "_id" in doc:
+                    doc["_id"] = str(doc["_id"])
+                if "timestamp" in doc and isinstance(doc["timestamp"], datetime):
+                    doc["timestamp"] = doc["timestamp"].isoformat()
+            return results
+        except Exception as e:
+            print(f"[TelemetryDB] Error al consultar alertas por farm: {e}")
+            return []
+
     def get_turbine_telemetry_by_date_range(
         self, 
         turbine_id: int, 
@@ -211,7 +288,6 @@ class TelemetryDB:
                     doc["_id"] = str(doc["_id"])
                 if "timestamp" in doc and isinstance(doc["timestamp"], datetime):
                     doc["timestamp"] = doc["timestamp"].isoformat()
-            
             return results
             
         except Exception as e:

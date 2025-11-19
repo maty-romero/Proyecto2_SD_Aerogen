@@ -25,22 +25,20 @@ class FarmTurbines(Resource):
     def get(self, farm_id):
         """
         Obtener todas las turbinas conectadas al broker en un parque
-        
-        Consulta el broker EMQX para obtener información en tiempo real
-        de las turbinas conectadas de un parque específico.
+        Consulta el broker EMQX para obtener información de las turbinas conectadas de un parque específico.
         """
         # Obtener clientes conectados del broker EMQX
         farm_clients = emqx_client.get_clients_by_farm(farm_id)
         
         if farm_clients is None:
             farms_ns.abort(503, 'No se pudo conectar con el broker EMQX')
-        
+            
         # Formatear información de turbinas
         turbines = [
             emqx_client.format_turbine_info(client)
             for client in farm_clients
         ]
-        
+
         return {
             'farm_id': farm_id,
             'count': len(turbines),
@@ -79,7 +77,7 @@ class TurbineHistory(Resource):
         db_client = get_db_client()
         
         if not db_client:
-            farms_ns.abort(503, 'Base de datos no disponible')
+            farms_ns.abort(503, 'Database unavailable')
         
         try:
             telemetry_data = db_client.get_turbine_telemetry_by_date_range(
@@ -99,5 +97,8 @@ class TurbineHistory(Resource):
             }, 200
             
         except Exception as e:
-            print(f"[API] Error al obtener historial: {e}")
+            print(f"[HISTORY_DEBUG] Error al obtener historial: {e}")
+            print(f"[HISTORY_DEBUG] Tipo de error: {type(e).__name__}")
+            import traceback
+            print(f"[HISTORY_DEBUG] Traceback: {traceback.format_exc()}")
             farms_ns.abort(503, f'Error al consultar la base de datos: {str(e)}')

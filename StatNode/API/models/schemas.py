@@ -30,19 +30,31 @@ turbines_list_model_connection = api.model('TurbinesListConnection', {
     )
 })
 
-
-alert_model = api.model('Alert', {
-    'id': fields.Integer(required=True, description='ID de la alerta'),
-    'message': fields.String(required=True, description='Mensaje'),
-    'turbine': fields.String(description='ID de la turbina'),
-    'severity': fields.String(description='Severidad', enum=['critical', 'warning', 'info']),
-    'timestamp': fields.String(description='Timestamp')
-})
-
 farm_history_model = api.model('FarmHistory', {
     'farm_id': fields.Integer(description='ID del parque'),
     'from': fields.String(description='Fecha inicio'),
     'to': fields.String(description='Fecha fin'),
     'count': fields.Integer(description='Número de registros'),
     'data': fields.List(fields.Raw, description='Datos históricos')
+})
+
+alert_model = api.model('Alert', {
+    'id': fields.String(attribute='_id', description='ID de la alerta'),
+    'message': fields.String(required=True, description='Mensaje'),
+    'turbine_id': fields.Integer(description='ID de la turbina'),
+    'turbine_name': fields.String(description='Nombre de la turbina'),
+    'severity': fields.String(description='Severidad', enum=['critical', 'warning', 'info']),
+    'timestamp': fields.String(description='Timestamp'),
+    'farm_id': fields.Integer(description='ID del parque'),
+    'farm_name': fields.String(description='Nombre del parque'),
+    'alert_type': fields.String(description='Tipo de alerta'),
+    'bearing_temperature_c': fields.Float(description='Temperatura de rodamiento'),
+    'timestamp_str': fields.String(description='Timestamp legible')
+})
+
+alert_history_model = api.model('FarmHistory', {
+    'farm_id': fields.Integer(description='ID del parque'),
+    'count': fields.Integer(description='Número de registros'),
+    'turbine_id': fields.String(description='ID de la turbina'),
+    'alerts': fields.List(fields.Nested(alert_model), description='Datos históricos')
 })

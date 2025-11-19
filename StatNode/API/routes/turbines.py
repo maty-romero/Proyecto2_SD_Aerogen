@@ -8,8 +8,8 @@ turbines_ns = Namespace('turbines', description='Operaciones de turbinas')
 api.add_namespace(turbines_ns)
 
 @turbines_ns.route('/<string:farm_id>/<string:turbine_id>')
-@turbines_ns.param('farm_id', 'ID del parque (ej: 01)')
-@turbines_ns.param('turbine_id', 'ID de la turbina dentro del parque (ej: 011)')
+@turbines_ns.param('farm_id', 'ID del parque')
+@turbines_ns.param('turbine_id', 'ID de la turbina dentro del parque')
 class TurbineDetail(Resource):
     @turbines_ns.doc('get_turbine_detail', security='apikey')
     @turbines_ns.marshal_with(turbine_connection_model)
@@ -26,7 +26,7 @@ class TurbineDetail(Resource):
         y retorna información sobre su estado de conexión.
         """
         # Consultar broker EMQX
-        client_info = emqx_client.get_client_by_farm_and_id(turbine_id)
+        client_info = emqx_client.get_client_by_farm_and_id(farm_id, turbine_id)
         
         if client_info is None:
             turbines_ns.abort(404, f'Turbina T{turbine_id} del parque {farm_id} no encontrada o no conectada')
